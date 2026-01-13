@@ -146,9 +146,10 @@
         <!-- 用户菜单 -->
         <div class="relative" ref="avatarRef">
           <div @click="showUserMenu = !showUserMenu" class="cursor-pointer relative group">
-            <template v-if="isAuthenticated && userInfo?.avatar">
+            <template v-if="isAuthenticated && userInfo && Object.keys(userInfo).length > 0">
               <img
-                :src="userInfo.avatar"
+                :src="getUserAvatarUrl(userInfo?.avatar || '', userInfo?.nickname || '', userInfo?.username || '')"
+                @error="handleAvatarError"
                 class="w-10 h-10 rounded-full border-2 border-white shadow-md group-hover:scale-110 transition-transform object-cover"
                 alt="User Avatar"
               >
@@ -175,7 +176,7 @@
 
             <template v-if="isAuthenticated">
               <div class="px-4 py-3 border-b border-gray-50">
-                <p class="text-sm font-bold text-gray-800 truncate">{{ userInfo?.nickname || userInfo?.username || '用户' }}</p>
+                <p class="text-sm font-bold text-gray-800 truncate">{{ (userInfo && userInfo.nickname) || (userInfo && userInfo.username) || '用户' }}</p>
                 <p class="text-xs text-gray-400 truncate">已登录</p>
               </div>
               <router-link to="/profile" class="block px-4 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
@@ -191,11 +192,11 @@
               <div class="px-4 py-3 text-xs text-gray-400 bg-gray-50 border-b border-gray-100 cursor-default">
                 当前身份：游客
               </div>
-              <router-link to="/profile" class="block px-4 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                <i class="fas fa-user mr-2 text-blue-500"></i>个人中心
-              </router-link>
+              <div class="block px-4 py-3 text-gray-400 cursor-not-allowed opacity-60">
+                <i class="fas fa-user mr-2"></i>个人中心（请先登录）
+              </div>
               <div class="h-px bg-gray-100 my-1"></div>
-              <div @click="goToLogin" class="block px-4 py-3 text-blue-600 hover:bg-blue-50 font-medium cursor-pointer transition-colors">
+              <div @click.stop="goToLogin" class="block px-4 py-3 text-blue-600 hover:bg-blue-50 font-medium cursor-pointer transition-colors">
                 <i class="fas fa-sign-in-alt mr-2"></i>返回登录
               </div>
             </template>
@@ -227,26 +228,30 @@
               class="project-card group relative bg-white/60 hover:bg-white backdrop-blur-sm rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 border border-white/50 cursor-pointer"
               @click="goToDetail(project.id)">
               <div class="flex items-center gap-4 mb-3">
-                <img :src="project.coverImage || project.logo" class="w-12 h-12 rounded-xl object-cover shadow-sm bg-white" alt="logo">
+                <img v-if="project" 
+                     :src="getImageUrl(project?.coverImage || project?.cover || project?.logo || project?.images?.[0] || '')" 
+                     @error="handleImageError"
+                     class="w-12 h-12 rounded-xl object-cover shadow-sm bg-white" alt="logo">
                 <div class="overflow-hidden">
-                  <h3 class="font-bold text-gray-800 truncate group-hover:text-blue-600 transition-colors">{{ project.name }}</h3>
+                  <h3 class="font-bold text-gray-800 truncate group-hover:text-blue-600 transition-colors">{{ project?.name || '' }}</h3>
                   <div class="flex items-center gap-2 text-xs text-gray-400 mt-1">
-                    <span><i class="far fa-eye"></i> {{ project.views }}</span>
-                    <span><i class="far fa-star"></i> {{ project.stars }}</span>
-                    <span><i class="fas fa-code-branch"></i> {{ project.contributors?.length || 0 }}</span>
+                    <span><i class="far fa-eye"></i> {{ project?.views || 0 }}</span>
+                    <!-- 直接使用 stars 字段，因为在 store 中已经映射为 collections 的值 -->
+                    <span><i class="far fa-star"></i> {{ project?.collections || 0 }}</span>
+                    <span><i class="fas fa-code-branch"></i> {{ project?.contributors?.length || 0 }}</span>
                   </div>
                 </div>
               </div>
               <p class="text-sm text-gray-500 leading-relaxed line-clamp-2 h-10">
-                {{ project.description }}
+                {{ project?.description || '' }}
               </p>
               <!-- 技术栈标签 -->
               <div class="mt-3 flex flex-wrap gap-1">
-                <span v-for="tech in project.technologies?.slice(0, 3)" :key="tech"
+                <span v-for="tech in (project?.technologies || []).slice(0, 3)" :key="tech"
                       class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
                   {{ tech }}
                 </span>
-                <span v-if="project.technologies?.length > 3" class="text-xs text-gray-400">+{{ project.technologies.length - 3 }}</span>
+                <span v-if="project?.technologies && project.technologies.length > 3" class="text-xs text-gray-400">+{{ project.technologies.length - 3 }}</span>
               </div>
             </div>
             <!-- 提示框 -->
@@ -266,17 +271,60 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { getUserAvatarUrl } from '@/utils/avatar'
+import { getImageUrl } from '@/utils/image'
 
 const router = useRouter()
 const store = useStore()
 
 // 使用 Vuex 的 state 和 getters
-const projectsList = computed(() => store.state.projects.projectsList || [])
-const categories = computed(() => store.state.projects.categories || [])
-const userInfo = computed(() => store.getters.userInfo || {})
-const activeFilters = computed(() => store.state.projects.activeFilters || { tags: [], sort: '最新' })
-const searchResults = computed(() => store.state.projects.searchResults || [])
-const isAuthenticated = computed(() => store.getters.isLoggedIn || false)
+const projectsList = computed(() => {
+  try {
+    const list = store.state.projects?.projectsList
+    return Array.isArray(list) ? list : []
+  } catch (error) {
+    return []
+  }
+})
+const categories = computed(() => {
+  try {
+    const cats = store.state.projects?.categories
+    return Array.isArray(cats) ? cats : []
+  } catch (error) {
+    return []
+  }
+})
+const userInfo = computed(() => {
+  try {
+    const info = store.getters.userInfo
+    return info && typeof info === 'object' ? info : {}
+  } catch (error) {
+    return {}
+  }
+})
+const activeFilters = computed(() => {
+  try {
+    const filters = store.state.projects?.activeFilters
+    return filters && typeof filters === 'object' ? filters : { tags: [], sort: '最新' }
+  } catch (error) {
+    return { tags: [], sort: '最新' }
+  }
+})
+const searchResults = computed(() => {
+  try {
+    const results = store.state.projects?.searchResults
+    return Array.isArray(results) ? results : []
+  } catch (error) {
+    return []
+  }
+})
+const isAuthenticated = computed(() => {
+  try {
+    return store.getters.isLoggedIn === true
+  } catch (error) {
+    return false
+  }
+})
 
 // 搜索引擎配置
 const engines = [
@@ -296,8 +344,8 @@ const currentEngineName = computed(() => {
 
 const userInitial = computed(() => {
   if (!isAuthenticated.value) return '游'
-  if (userInfo.value?.nickname) return userInfo.value.nickname.charAt(0)
-  if (userInfo.value?.username) return userInfo.value.username.charAt(0)
+  if (userInfo.value && userInfo.value.nickname) return userInfo.value.nickname.charAt(0)
+  if (userInfo.value && userInfo.value.username) return userInfo.value.username.charAt(0)
   return '我'
 })
 
@@ -321,15 +369,17 @@ const TOOLTIP_DELAY = 500
 
 // 计算属性 - 修复 includes() 错误
 const filteredTagGroups = computed(() => {
+  try {
   const tags = store.getters.projectsTagsByCategory || {}
+    if (!tags || typeof tags !== 'object') return {}
   const searchTerm = (tagFilterSearch.value || '').toLowerCase()
 
   if (searchTerm && searchTerm.trim()) {
     const filtered = {}
     Object.keys(tags).forEach(groupName => {
-      if (tags[groupName]) {
+        if (tags[groupName] && Array.isArray(tags[groupName])) {
         const filteredTags = tags[groupName].filter(tag => {
-          if (!tag) return false
+            if (!tag || typeof tag !== 'object') return false
           const tagName = (tag.name || '').toLowerCase()
           const tagId = (tag.id || '').toLowerCase()
           return tagName.includes(searchTerm) || tagId.includes(searchTerm)
@@ -342,14 +392,27 @@ const filteredTagGroups = computed(() => {
     return filtered
   }
   return tags
+  } catch (error) {
+    console.error('filteredTagGroups computed error:', error)
+    return {}
+  }
 })
 
 const filteredCategories = computed(() => {
-  if (hasSearched.value && searchResults.value.length > 0) {
-    const cats = [...new Set(searchResults.value.map(p => p.category))]
-    return categories.value?.filter(cat => cats.includes(cat))
+  try {
+    if (hasSearched.value && searchResults.value && Array.isArray(searchResults.value) && searchResults.value.length > 0) {
+      const cats = [...new Set(searchResults.value
+        .filter(p => p && p.category)
+        .map(p => p.category)
+        .filter(Boolean))]
+      const catsList = Array.isArray(categories.value) ? categories.value : []
+      return catsList.filter(cat => cats.includes(cat))
   }
-  return categories.value
+    return Array.isArray(categories.value) ? categories.value : []
+  } catch (error) {
+    console.error('filteredCategories computed error:', error)
+    return []
+  }
 })
 
 // 方法
@@ -422,14 +485,16 @@ const clearTagFilters = () => {
 const getProjectsByCategory = (cat) => {
   let list = []
   if (hasSearched.value) {
-    if (searchResults.value.length > 0) {
-      list = searchResults.value?.filter(p => p.category === cat)
+    if (searchResults.value && Array.isArray(searchResults.value) && searchResults.value.length > 0) {
+      list = searchResults.value.filter(p => p && p.category === cat)
       return filterProjectList(list)
     } else {
-      return list
+      return []
     }
   }
-  list = projectsList.value?.filter(p => p.category === cat)
+  if (projectsList.value && Array.isArray(projectsList.value)) {
+    list = projectsList.value.filter(p => p && p.category === cat)
+  }
   return filterProjectList(list)
 }
 
@@ -443,7 +508,7 @@ const filterProjectList = (list) => {
   } else if (activeFilters.value.sort === '最热') {
     filtered.sort((a, b) => (b.views || 0) - (a.views || 0))
   } else if (activeFilters.value.sort === '最多收藏') {
-    filtered.sort((a, b) => (b.stars || 0) - (a.stars || 0))
+    filtered.sort((a, b) => (b.collections || 0) - (a.collections || 0))
   }
 
   if (activeFilters.value.tags && activeFilters.value.tags.length > 0) {
@@ -476,7 +541,13 @@ const goToDetail = async (id) => {
 }
 
 const goToLogin = () => {
-  router.push({ name: 'Login' })
+  // 先关闭下拉菜单
+  showUserMenu.value = false
+  // 然后跳转到登录页，并保存当前路径以便登录后返回
+  router.push({
+    name: 'Login',
+    query: { redirect: router.currentRoute.value.fullPath }
+  })
 }
 
 const handleLogout = async () => {
@@ -486,6 +557,38 @@ const handleLogout = async () => {
     ElMessage.success('已退出登录')
   } catch (error) {
     ElMessage.error('退出登录失败')
+  }
+}
+
+// 处理用户头像加载错误
+const handleAvatarError = (event) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标（SVG），不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml')) {
+    return
+  }
+  
+  // 使用用户信息生成默认头像
+  const defaultAvatar = getUserAvatarUrl('', (userInfo.value && userInfo.value.nickname) || '', (userInfo.value && userInfo.value.username) || '')
+  
+  if (event.target.src !== defaultAvatar) {
+    event.target.src = defaultAvatar
+  }
+}
+
+// 处理项目图片加载错误
+const handleImageError = (event) => {
+  // 如果图片加载失败，生成一个默认的 SVG 图标
+  const svgIcon = `data:image/svg+xml,${encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+      <rect width="48" height="48" fill="#f3f4f6" rx="8"/>
+      <path d="M24 16 L32 24 L24 32 L16 24 Z" fill="#9ca3af" opacity="0.5"/>
+      <circle cx="24" cy="24" r="4" fill="#6b7280"/>
+    </svg>
+  `)}`
+  if (event.target.src !== svgIcon) {
+    event.target.src = svgIcon
   }
 }
 
@@ -745,3 +848,4 @@ onUnmounted(() => {
   animation: slideDown 0.3s ease-out;
 }
 </style>
+

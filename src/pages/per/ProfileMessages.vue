@@ -90,7 +90,7 @@
               @click="selectMessage(message)"
             >
               <div class="message-avatar">
-                <img :src="message.sender.avatar || getDefaultAvatar()" :alt="message.sender.name" class="avatar">
+                <img :src="getUserAvatarUrl(message.sender.avatar, message.sender.name, message.sender.email)" :alt="message.sender.name" class="avatar">
                 <div v-if="!message.read" class="unread-dot"></div>
               </div>
 
@@ -158,7 +158,7 @@
           <!-- 消息头部 -->
           <div class="message-header-detail">
             <div class="sender-detail">
-              <img :src="activeMessage.sender.avatar || getDefaultAvatar()" :alt="activeMessage.sender.name" class="sender-avatar">
+              <img :src="getUserAvatarUrl(activeMessage.sender.avatar, activeMessage.sender.name, activeMessage.sender.email)" :alt="activeMessage.sender.name" class="sender-avatar">
               <div class="sender-info-detail">
                 <div class="sender-name-detail">
                   <span>{{ activeMessage.sender.name }}</span>
@@ -303,7 +303,7 @@
                 :value="user.id"
               >
                 <div class="user-option">
-                  <img :src="user.avatar" class="option-avatar">
+                  <img :src="getUserAvatarUrl(user.avatar, user.name, user.email)" class="option-avatar">
                   <div class="option-info">
                     <span class="option-name">{{ user.name }}</span>
                     <span class="option-email">{{ user.email }}</span>
@@ -387,6 +387,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getUserAvatarUrl } from '@/utils/avatar'
 // import axios from 'axios'
 
 const store = useStore()
@@ -480,9 +481,6 @@ const getTabCount = (tabId) => {
   }
 }
 
-const getDefaultAvatar = () => {
-  return 'https://picsum.photos/seed/avatar/200/200'
-}
 
 const getTypeLabel = (type) => {
   const labels = {

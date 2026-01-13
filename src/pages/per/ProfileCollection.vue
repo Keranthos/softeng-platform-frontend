@@ -35,19 +35,24 @@
           加载中...
         </div>
 
-        <div v-else-if="collections.length === 0" class="empty-state">
+        <div v-else-if="filteredCollections.length === 0" class="empty-state">
           <i class="fas fa-star"></i>
           <p>暂无收藏内容</p>
         </div>
 
         <div v-else class="collection-grid">
           <div
-            v-for="item in collections"
+            v-for="item in filteredCollections"
             :key="item.id"
             class="collection-item"
           >
             <div class="item-preview" @click="viewItem(item)">
-              <img :src="item.image || getDefaultImage(item.type)" :alt="item.title" class="item-image">
+              <img 
+                :src="item.image || getDefaultImage(item.type, item.title)" 
+                :alt="item.title" 
+                class="item-image"
+                @error="handleImageError($event, item)"
+              >
               <div class="item-overlay">
                 <button @click.stop="toggleCollect(item)" class="collect-btn active">
                   <i class="fas fa-star"></i>
@@ -65,16 +70,16 @@
 
               <div class="item-meta">
                 <span class="meta-item">
-                  <i class="fas fa-user"></i>
-                  {{ item.author }}
+                  <i :class="getAuthorIcon(item.type)"></i>
+                  {{ item.author || '未知' }}
                 </span>
                 <span class="meta-item">
                   <i class="far fa-clock"></i>
-                  {{ formatDate(item.createdAt) }}
+                  {{ formatDate(item.collectedAt || item.createdAt) }}
                 </span>
                 <span class="meta-item">
                   <i class="fas fa-eye"></i>
-                  {{ item.views }}
+                  {{ item.views || 0 }}
                 </span>
               </div>
             </div>
@@ -94,7 +99,7 @@
       </div>
 
       <!-- 分页 -->
-      <div v-if="total > pageSize" class="pagination">
+      <div v-if="totalPages > 1" class="pagination">
         <button
           @click="prevPage"
           :disabled="currentPage === 1"
@@ -126,11 +131,12 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useStore } from 'vuex'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { HttpManager } from '@/api'
 
-const store = useStore()
+const router = useRouter()
+
 const loading = ref(false)
 const activeCategory = ref('all')
 const currentPage = ref(1)
@@ -148,7 +154,42 @@ const categories = ref([
 ])
 
 // 计算属性
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
+// 筛选后的收藏列表
+const filteredCollections = computed(() => {
+  let filtered = collections.value
+  
+  // 根据分类筛选
+  if (activeCategory.value !== 'all') {
+    const typeMap = {
+      'tools': 'tool',
+      'courses': 'course',
+      'projects': 'project'
+    }
+    const targetType = typeMap[activeCategory.value] || activeCategory.value
+    filtered = filtered.filter(item => item.type === targetType)
+  }
+  
+  // 分页
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filtered.slice(start, end)
+})
+
+// 计算总页数（基于筛选后的数据）
+const totalPages = computed(() => {
+  let filtered = collections.value
+  if (activeCategory.value !== 'all') {
+    const typeMap = {
+      'tools': 'tool',
+      'courses': 'course',
+      'projects': 'project'
+    }
+    const targetType = typeMap[activeCategory.value] || activeCategory.value
+    filtered = filtered.filter(item => item.type === targetType)
+  }
+  return Math.ceil(filtered.length / pageSize.value)
+})
+
 const pageRange = computed(() => {
   const range = []
   const start = Math.max(1, currentPage.value - 2)
@@ -169,64 +210,358 @@ const getTypeLabel = (type) => {
   return labels[type] || type
 }
 
-const getDefaultImage = (type) => {
-  const images = {
-    tool: 'https://picsum.photos/seed/tool/400/300',
-    course: 'https://picsum.photos/seed/course/400/300',
-    project: 'https://picsum.photos/seed/project/400/300'
+// 根据资源类型获取作者信息图标
+const getAuthorIcon = (type) => {
+  switch (type) {
+    case 'tool':
+      return 'fas fa-tag' // 工具使用标签图标
+    case 'project':
+      return 'fas fa-code' // 项目使用代码/技术栈图标
+    case 'course':
+      return 'fas fa-chalkboard-teacher' // 课程使用教师图标
+    default:
+      return 'fas fa-user' // 默认使用用户图标
   }
-  return images[type] || 'https://picsum.photos/400/300'
+}
+
+// 生成默认图标
+const generateDefaultIcon = (name, type = 'tool') => {
+  if (!name || typeof name !== 'string') {
+    name = type === 'tool' ? '工具' : type === 'course' ? '课程' : '项目'
+  }
+  const initial = name[0] || '?'
+  
+  // 根据类型选择不同的颜色
+  const colors = {
+    tool: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8'],
+    course: ['#48BB78', '#38A169', '#2F855A', '#22543D', '#1A202C'],
+    project: ['#ED8936', '#DD6B20', '#C05621', '#9C4221', '#7C2D12']
+  }
+  const colorSet = colors[type] || colors.tool
+  const colorIndex = initial.charCodeAt(0) % colorSet.length
+  const bgColor = colorSet[colorIndex]
+  
+  // 生成SVG图标
+  const svg = `<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg"><rect width="400" height="300" fill="${bgColor}"/><text x="50%" y="50%" font-family="Arial, sans-serif" font-size="120" fill="white" text-anchor="middle" dominant-baseline="central" font-weight="bold">${initial}</text></svg>`
+  
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+}
+
+const getDefaultImage = (type, name = '') => {
+  return generateDefaultIcon(name, type)
 }
 
 const formatDate = (dateString) => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('zh-CN')
+  if (!dateString || dateString === '' || dateString === 'null' || dateString === 'undefined') {
+    console.warn('日期为空:', dateString)
+    return '未知时间'
+  }
+  // 处理 MySQL 日期时间格式 "2006-01-02 15:04:05"
+  // 将第一个空格替换为 'T' 以便 JavaScript Date 能正确解析
+  let dateStr = String(dateString).trim()
+  if (dateStr.includes(' ') && !dateStr.includes('T')) {
+    dateStr = dateStr.replace(' ', 'T')
+    // 添加时区信息（如果需要）
+    if (!dateStr.includes('+') && !dateStr.includes('Z') && !dateStr.includes('-', 10)) {
+      // MySQL 日期格式不包含时区，默认使用本地时区
+    }
+  }
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) {
+    // 如果仍然解析失败，尝试使用正则表达式解析
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}):(\d{2}))?/)
+    if (match) {
+      const year = parseInt(match[1], 10)
+      const month = parseInt(match[2], 10) - 1
+      const day = parseInt(match[3], 10)
+      const hour = match[4] ? parseInt(match[4], 10) : 0
+      const minute = match[5] ? parseInt(match[5], 10) : 0
+      const second = match[6] ? parseInt(match[6], 10) : 0
+      const parsedDate = new Date(year, month, day, hour, minute, second)
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate.toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        })
+      }
+    }
+    console.warn('日期解析失败:', dateString, '解析后的字符串:', dateStr)
+    return '未知时间'
+  }
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
+
+// 处理图片加载错误
+const handleImageError = (event, item) => {
+  const defaultIcon = getDefaultImage(item.type, item.title)
+  if (event.target.src !== defaultIcon) {
+    event.target.src = defaultIcon
+  }
 }
 
 // 方法
 const fetchCollections = async () => {
   loading.value = true
   try {
-    const token = store.state.token || localStorage.getItem('token')
-    const response = await HttpManager.getUserCollection(token)
+    // 检查是否已登录（token 会在请求拦截器中自动添加）
+    const token = localStorage.getItem('token')
+    if (!token) {
+      ElMessage.warning('请先登录以查看收藏')
+      collections.value = []
+      total.value = 0
+      // 重置分类计数
+      categories.value.forEach(cat => {
+        cat.count = 0
+      })
+      return
+    }
 
+    const response = await HttpManager.getUserCollection()
+    
+    // 调试：打印后端返回的原始数据（使用 JSON.stringify 确保完整输出）
+    console.log('收藏数据后端原始响应:', JSON.stringify(response, null, 2))
+    console.log('收藏数据后端原始响应 (原始对象):', response)
+
+    // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
+    // 或者: { islogin: true, data: { tools: [...], resources: [...], teaches: [...] } }
+    let allCollections = []
+    
+    // 处理不同格式的响应数据
     if (response.islogin && response.data) {
-      const allCollections = [
-        ...response.data.tools?.map(tool => ({
+      // 格式1: { islogin: true, data: { tools: [], resources: [], teaches: [] } }
+      allCollections = [
+        ...(response.data.tools?.map(tool => {
+          const title = tool.name || tool.resourceName || tool.introduce || '工具'
+          // 调试：打印工具数据
+          console.log('工具原始数据:', { 
+            name: tool.name, 
+            resourceName: tool.resourceName, 
+            tags: tool.tags, 
+            category: tool.category,
+            created_at: tool.created_at,
+            tool 
+          })
+          return {
           ...tool,
           type: 'tool',
-          title: tool.introduce || '工具',
-          author: tool.contributer?.[0]?.nickname || '未知作者'
-        })) || [],
-        ...response.data.resources?.map(resource => ({
+          resourceType: 'tool',
+            id: tool.resourceId || tool.resource_id || tool.id,
+          resourceId: tool.resourceId || tool.resource_id,
+            title: title,
+            description: tool.introduce || tool.description || tool.desc || '',
+            // 工具作者：显示第一个标签
+            author: (Array.isArray(tool.tags) && tool.tags.length > 0) 
+              ? tool.tags[0] 
+              : (tool.category || tool.catagory || '未知'),
+            image: tool.image?.[0] || tool.logo || tool.icon || '',
+            views: tool.views || 0,
+            // 收藏时间（从 collections 表的 created_at）
+            collectedAt: tool.created_at || tool.createdAt || tool.collectedAt || tool.createdDate || '',
+            createdAt: tool.created_at || tool.createdAt || tool.createdDate || ''
+          }
+        }) || []),
+        ...(response.data.resources?.map(resource => {
+          // 优先使用 resourceName，然后使用 name，最后使用其他字段
+          const title = resource.resourceName || resource.name || resource.projectName || resource.introduce || '项目'
+          // 调试：打印项目数据
+          console.log('项目原始数据:', { 
+            resourceName: resource.resourceName, 
+            name: resource.name, 
+            techStack: resource.techStack, 
+            technologies: resource.technologies,
+            created_at: resource.created_at,
+            resource 
+          })
+          return {
           ...resource,
           type: 'project',
-          title: resource.introduce || '资源',
-          author: resource.contributer?.[0]?.nickname || '未知作者'
-        })) || [],
-        ...response.data.teaches?.map(teach => ({
+          resourceType: 'project',
+            id: resource.resourceId || resource.resource_id || resource.projectId || resource.project_id || resource.id,
+          resourceId: resource.resourceId || resource.resource_id || resource.projectId || resource.project_id,
+            title: title,
+            description: resource.introduce || resource.description || resource.desc || '',
+            // 项目作者：显示第一个技术栈
+            author: (Array.isArray(resource.techStack) && resource.techStack.length > 0) 
+              ? resource.techStack[0] 
+              : ((Array.isArray(resource.technologies) && resource.technologies.length > 0) 
+                ? resource.technologies[0] 
+                : '未知'),
+            image: resource.coverImage || resource.cover || resource.image?.[0] || resource.logo || '',
+            views: resource.views || 0,
+            // 收藏时间（从 collections 表的 created_at）
+            collectedAt: resource.created_at || resource.createdAt || resource.collectedAt || resource.createdDate || '',
+            createdAt: resource.created_at || resource.createdAt || resource.createdDate || ''
+          }
+        }) || []),
+        ...(response.data.teaches?.map(teach => {
+          // 优先使用 resourceName，然后使用 name，最后使用其他字段
+          const title = teach.resourceName || teach.name || teach.courseName || teach.introduce || '课程'
+          // 调试：打印课程数据
+          console.log('课程原始数据:', { 
+            resourceName: teach.resourceName, 
+            name: teach.name, 
+            teacher: teach.teacher,
+            created_at: teach.created_at,
+            teach 
+          })
+          // 处理 teacher 字段（可能是字符串或数组）
+          let teacher = '未知'
+          if (Array.isArray(teach.teacher) && teach.teacher.length > 0) {
+            teacher = teach.teacher[0]
+          } else if (typeof teach.teacher === 'string' && teach.teacher) {
+            teacher = teach.teacher
+          }
+          return {
           ...teach,
           type: 'course',
-          title: teach.introduce || '课程',
-          author: teach.contributer?.[0]?.nickname || '未知作者'
-        })) || []
+          resourceType: 'course',
+            id: teach.resourceId || teach.resource_id || teach.courseId || teach.course_id || teach.id,
+          resourceId: teach.resourceId || teach.resource_id || teach.courseId || teach.course_id,
+            title: title,
+            description: teach.introduce || teach.description || teach.desc || '',
+            // 课程作者：显示任课老师
+            author: teacher,
+            image: teach.cover || teach.image?.[0] || teach.logo || '',
+            views: teach.views || 0,
+            // 收藏时间（从 collections 表的 created_at）
+            collectedAt: teach.created_at || teach.createdAt || teach.collectedAt || teach.createdDate || '',
+            createdAt: teach.created_at || teach.createdAt || teach.createdDate || ''
+          }
+        }) || [])
       ]
-
-      collections.value = allCollections
-      total.value = allCollections.length
-
-      // 更新分类计数
-      categories.value.forEach(cat => {
-        if (cat.id === 'all') {
-          cat.count = allCollections.length
-        } else {
-          cat.count = allCollections.filter(item => item.type === cat.id.slice(0, -1)).length
-        }
-      })
+    } else if (response.tools || response.resources || response.teaches || response.message === 'success') {
+      // 格式2: { message: "success", tools: [], resources: [], teaches: [] }
+      const responseData = response.data || response
+      allCollections = [
+        ...((responseData.tools || response.tools)?.map(tool => {
+          const title = tool.name || tool.resourceName || tool.introduce || '工具'
+          // 调试：打印工具数据
+          console.log('工具原始数据 (格式2):', { 
+            name: tool.name, 
+            resourceName: tool.resourceName, 
+            tags: tool.tags, 
+            category: tool.category,
+            created_at: tool.created_at,
+            tool 
+          })
+          return {
+          ...tool,
+          type: 'tool',
+          resourceType: 'tool',
+            id: tool.resourceId || tool.resource_id || tool.id,
+          resourceId: tool.resourceId || tool.resource_id,
+            title: title,
+            description: tool.introduce || tool.description || tool.desc || '',
+            // 工具作者：显示第一个标签
+            author: (Array.isArray(tool.tags) && tool.tags.length > 0) 
+              ? tool.tags[0] 
+              : (tool.category || tool.catagory || '未知'),
+            image: tool.image?.[0] || tool.logo || tool.icon || '',
+            views: tool.views || 0,
+            // 收藏时间（从 collections 表的 created_at）
+            collectedAt: tool.created_at || tool.createdAt || tool.collectedAt || tool.createdDate || '',
+            createdAt: tool.created_at || tool.createdAt || tool.createdDate || ''
+          }
+        }) || []),
+        ...((responseData.resources || response.resources)?.map(resource => {
+          // 优先使用 resourceName，然后使用 name，最后使用其他字段
+          const title = resource.resourceName || resource.name || resource.projectName || resource.introduce || '项目'
+          // 调试：打印项目数据
+          console.log('项目原始数据 (格式2):', { 
+            resourceName: resource.resourceName, 
+            name: resource.name, 
+            techStack: resource.techStack, 
+            technologies: resource.technologies,
+            created_at: resource.created_at,
+            resource 
+          })
+          return {
+          ...resource,
+          type: 'project',
+          resourceType: 'project',
+            id: resource.resourceId || resource.resource_id || resource.projectId || resource.project_id || resource.id,
+          resourceId: resource.resourceId || resource.resource_id || resource.projectId || resource.project_id,
+            title: title,
+            description: resource.introduce || resource.description || resource.desc || '',
+            // 项目作者：显示第一个技术栈
+            author: (Array.isArray(resource.techStack) && resource.techStack.length > 0) 
+              ? resource.techStack[0] 
+              : ((Array.isArray(resource.technologies) && resource.technologies.length > 0) 
+                ? resource.technologies[0] 
+                : '未知'),
+            image: resource.coverImage || resource.cover || resource.image?.[0] || resource.logo || '',
+            views: resource.views || 0,
+            // 收藏时间（从 collections 表的 created_at）
+            collectedAt: resource.created_at || resource.createdAt || resource.collectedAt || resource.createdDate || '',
+            createdAt: resource.created_at || resource.createdAt || resource.createdDate || ''
+          }
+        }) || []),
+        ...((responseData.teaches || response.teaches)?.map(teach => {
+          // 优先使用 resourceName，然后使用 name，最后使用其他字段
+          const title = teach.resourceName || teach.name || teach.courseName || teach.introduce || '课程'
+          // 处理 teacher 字段（可能是字符串或数组）
+          let teacher = '未知'
+          if (Array.isArray(teach.teacher) && teach.teacher.length > 0) {
+            teacher = teach.teacher[0]
+          } else if (typeof teach.teacher === 'string' && teach.teacher) {
+            teacher = teach.teacher
+          }
+          return {
+          ...teach,
+          type: 'course',
+          resourceType: 'course',
+            id: teach.resourceId || teach.resource_id || teach.courseId || teach.course_id || teach.id,
+          resourceId: teach.resourceId || teach.resource_id || teach.courseId || teach.course_id,
+            title: title,
+            description: teach.introduce || teach.description || teach.desc || '',
+            // 课程作者：显示任课老师
+            author: teacher,
+            image: teach.cover || teach.image?.[0] || teach.logo || '',
+            views: teach.views || 0,
+            // 收藏时间（从 collections 表的 created_at）
+            collectedAt: teach.created_at || teach.createdAt || teach.collectedAt || teach.createdDate || '',
+            createdAt: teach.created_at || teach.createdAt || teach.createdDate || ''
+          }
+        }) || [])
+      ]
     }
+
+    // 统一更新数据：无论哪种格式，都要更新 collections、total 和分类计数
+    collections.value = allCollections
+    total.value = allCollections.length
+
+    // 更新分类计数
+    categories.value.forEach(cat => {
+      if (cat.id === 'all') {
+        cat.count = allCollections.length
+      } else {
+        // 'tools' -> 'tool', 'courses' -> 'course', 'projects' -> 'project'
+        const typeMap = {
+          'tools': 'tool',
+          'courses': 'course',
+          'projects': 'project'
+        }
+        const targetType = typeMap[cat.id] || cat.id.slice(0, -1)
+        cat.count = allCollections.filter(item => item.type === targetType).length
+      }
+    })
   } catch (error) {
     console.error('获取收藏失败:', error)
-    ElMessage.error('获取收藏失败')
+    // 401错误已经在响应拦截器中处理（跳转登录页），这里只处理其他错误
+    if (error.response?.status !== 401) {
+      ElMessage.error('获取收藏失败，请稍后重试')
+    }
+    collections.value = []
+    total.value = 0
+    // 重置分类计数
+    categories.value.forEach(cat => {
+      cat.count = 0
+    })
   } finally {
     loading.value = false
   }
@@ -241,23 +576,21 @@ const viewItem = (item) => {
   // 根据类型跳转到不同页面
   const routes = {
     tool: `/tools/detail/${item.resourceId}`,
-    course: `/courses/detail/${item.resourceId}`,
-    project: `/projects/${item.resourceId}`
+    course: `/course/detail/${item.resourceId}`, // 使用单数 course，与路由配置一致
+    project: `/projects/detail/${item.resourceId}`
   }
 
   if (routes[item.type]) {
-    window.location.href = routes[item.type]
+    router.push(routes[item.type])
   }
 }
 
 const toggleCollect = async (item) => {
   try {
-    const token = store.state.token || localStorage.getItem('token')
-
+    // token 已在请求拦截器中自动添加，不需要传递
     await HttpManager.deleteCollection(
-      item.resourceType,
-      item.resourceId,
-      token
+      item.resourceType || item.type,
+      item.resourceId || item.resource_id || item.projectId || item.project_id || item.courseId || item.course_id
     )
 
     // 重新获取数据
@@ -265,7 +598,7 @@ const toggleCollect = async (item) => {
     ElMessage.success('已取消收藏')
   } catch (error) {
     console.error('取消收藏失败:', error)
-    ElMessage.error('取消收藏失败')
+    ElMessage.error(error.message || '取消收藏失败')
   }
 }
 

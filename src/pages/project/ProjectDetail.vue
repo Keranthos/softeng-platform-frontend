@@ -9,7 +9,9 @@
       <!-- 左侧图标和统计 -->
       <div class="flex flex-col items-center gap-4 min-w-[120px]">
         <div class="w-28 h-28 rounded-3xl bg-gray-50 p-2 shadow-inner border border-gray-200">
-          <img :src="project.logo" class="w-full h-full object-contain rounded-2xl" alt="icon">
+          <img :src="getImageUrl(project.logo || project.cover || project.coverImage)" 
+               @error="handleLogoError"
+               class="w-full h-full object-contain rounded-2xl" alt="icon">
         </div>
 
         <!-- 统计数据 -->
@@ -19,7 +21,7 @@
               'text-lg mb-1 transition-transform hover:scale-110',
               isCollected ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-400'
             ]"></i>
-            <span>{{ project.stars }}</span>
+            <span>{{ project.collections !== undefined && project.collections !== null ? project.collections : 0 }}</span>
           </div>
           <div class="flex flex-col items-center">
             <i class="fas fa-eye text-blue-400 text-lg mb-1"></i>
@@ -34,7 +36,11 @@
         <!-- 贡献者 -->
         <div v-if="project.contributors && project.contributors.length > 0"
           class="flex items-center gap-2 mt-2 bg-gray-50 px-3 py-1.5 rounded-full cursor-pointer hover:bg-gray-100 transition-colors">
-          <img :src="project.contributors[0].avatar" alt='用户头像' class="w-5 h-5 rounded-full">
+          <img 
+            :src="getUserAvatarUrl(project.contributors[0].avatar, project.contributors[0].name, '')" 
+            alt='用户头像' 
+            class="w-5 h-5 rounded-full"
+            @error="handleContributorAvatarError($event, project.contributors[0])">
           <span class="text-xs text-gray-600">{{ project.contributors[0].name }}</span>
         </div>
       </div>
@@ -88,6 +94,24 @@
       </div>
     </div>
 
+    <!-- 项目图片展示区域 -->
+    <div v-if="project.images && project.images.length > 0" class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-8">
+      <h2 class="text-lg font-bold text-[#00a99d] flex items-center gap-2 mb-6">
+        <i class="fas fa-images"></i> 项目图片
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div v-for="(image, index) in project.images" :key="index" class="relative group">
+          <img 
+            :src="getImageUrl(image)" 
+            @error="handleImageError"
+            class="w-full h-64 object-cover rounded-xl border border-gray-200 hover:shadow-lg transition-shadow cursor-pointer"
+            :alt="`项目图片 ${index + 1}`"
+            @click="openImageModal(image, index)">
+          <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-xl"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 项目详情区域 -->
     <div class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-8">
       <h2 class="text-lg font-bold text-[#00a99d] flex items-center gap-2 mb-6">
@@ -112,7 +136,11 @@
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <div v-for="contributor in project.contributors" :key="contributor.id"
           class="flex items-center gap-3 bg-gray-50 p-4 rounded-xl hover:bg-gray-100 transition-colors">
-          <img :src="contributor.avatar" alt='用户头像' class="w-10 h-10 rounded-full border border-gray-300">
+          <img 
+            :src="getUserAvatarUrl(contributor.avatar, contributor.name, '')" 
+            alt='用户头像' 
+            class="w-10 h-10 rounded-full border border-gray-300 object-cover"
+            @error="handleContributorAvatarError($event, contributor)">
           <div>
             <div class="font-medium text-gray-800">{{ contributor.name }}</div>
             <div class="text-xs text-gray-500">{{ contributor.role || '贡献者' }}</div>
@@ -161,11 +189,14 @@
           class="comment-card bg-gray-50 rounded-xl p-6 border border-gray-200 hover:border-gray-300 transition-colors">
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-3">
-              <img :src="comment.avatar || '/default-avatar.png'" class="w-10 h-10 rounded-full border border-gray-300"
-                alt="用户头像">
+              <img 
+                :src="getUserAvatarUrl(comment.avatar || comment.avater, comment.nickname, '')" 
+                class="w-10 h-10 rounded-full border border-gray-300 object-cover"
+                alt="用户头像"
+                @error="handleCommentAvatarError($event, comment)">
               <div>
                 <div class="font-medium text-gray-800">
-                  {{ comment.nickname || comment.username || '匿名用户' }}
+                  {{ comment.nickname || '匿名用户' }}
                 </div>
                 <div class="text-xs text-gray-500">
                   {{ formatTime(comment.createdAt) }}
@@ -206,8 +237,11 @@
       <!-- 发表评论 -->
       <div v-if="isAuthenticated" class="mt-8">
         <div class="flex items-start gap-4">
-          <img :src="userInfo.avatar || '/default-avatar.png'"
-            class="w-10 h-10 rounded-full border border-gray-300 flex-shrink-0" alt="我的头像">
+          <img 
+            :src="getUserAvatarUrl(userInfo?.avatar, userInfo?.nickname, userInfo?.username)"
+            class="w-10 h-10 rounded-full border border-gray-300 flex-shrink-0 object-cover" 
+            alt="我的头像"
+            @error="handleCommentAvatarError($event)">
           <div class="flex-1">
             <textarea v-model="newComment" placeholder="写下你的评论... (支持emoji表情)" rows="3"
               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none transition-all"
@@ -249,15 +283,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex' // 修改：使用 Vuex
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { HttpManager } from '@/api'
-import { detailSkeleton } from '@/components/DetailSkeleton.vue'
+import detailSkeleton from '@/components/DetailSkeleton.vue'
+import { getUserAvatarUrl } from '@/utils/avatar'
+import { getImageUrl } from '@/utils/image'
 // 假设有项目标签数据
 // import { projectTags } from '@/store/projectTags'
-import {
-  addMockProjectComment,
-  deleteMockProjectComment,
-  getCommentsByProjectId,
-  toggleLikeMockProjectComment
-} from '@/data/project/mockData'
 
 
 const router = useRouter()
@@ -306,12 +336,35 @@ const sortedComments = computed(() => {
 // 三、方法
 const checkCollectionStatus = async (projectId) => {
   try {
+    const token = store.state.token || localStorage.getItem('token')
+    if (!token) {
+      isCollected.value = false
+      return
+    }
     const response = await HttpManager.getUserCollection()
-    isCollected.value = response.data?.some(item =>
-      item.resourceId === parseInt(projectId) && item.resourceType === 'project'
+    // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
+    // 或者: { islogin: true, data: { tools: [...], resources: [...], teaches: [...] } }
+    let allCollections = []
+    if (response.data) {
+      allCollections = [
+        ...(response.data.tools || []),
+        ...(response.data.resources || []),
+        ...(response.data.teaches || [])
+      ]
+    } else if (response.tools || response.resources || response.teaches) {
+      allCollections = [
+        ...(response.tools || []),
+        ...(response.resources || []),
+        ...(response.teaches || [])
+      ]
+    }
+    isCollected.value = allCollections.some(item =>
+      (item.resourceId || item.resource_id) === parseInt(projectId) && 
+      (item.resourceType || item.resource_type) === 'project'
     )
   } catch (error) {
     console.error('检查收藏状态失败:', error)
+    isCollected.value = false
   }
 }
 
@@ -322,15 +375,78 @@ const handleCollect = async () => {
   }
 
   try {
+    // 保存操作前的状态，用于回滚
+    const previousCollections = project.value?.collections || 0
+    const previousIsCollected = isCollected.value
+    
+    const projectId = project.value?.projectId || project.value?.id
+    if (!projectId) {
+      ElMessage.error('项目ID不存在')
+      return
+    }
+    let response
     if (isCollected.value) {
-      await HttpManager.removeProjectCollection(project.value.id)
+      // 取消收藏
+      response = await HttpManager.removeProjectCollection(projectId)
     } else {
-      await HttpManager.toggleProjectCollection(project.value.id)
+      // 添加收藏
+      response = await HttpManager.toggleProjectCollection(projectId)
     }
 
-    isCollected.value = !isCollected.value
-    ElMessage.success(isCollected.value ? '已收藏' : '已取消收藏')
+    // 后端返回格式: { message: "success", data: { iscollected: true/false, collections: number } }
+    if (response && (response.message === 'success' || response.code === 200 || response.data)) {
+      const data = response.data || response
+      const newIsCollected = data.iscollected !== undefined ? data.iscollected : !isCollected.value
+      
+      // 更新收藏状态
+      isCollected.value = newIsCollected
+      
+      // 更新项目收藏数
+      // 优先使用后端返回的 collections 值（这是数据库中最准确的）
+      let finalCollections = previousCollections
+      if (data.collections !== undefined && typeof data.collections === 'number' && data.collections >= 0) {
+        finalCollections = data.collections
+        if (project.value) {
+          project.value.collections = finalCollections
+        }
+        console.log('使用后端返回的收藏数:', finalCollections)
+      } else {
+        // 如果后端没有返回 collections 或值为无效，则根据收藏状态变化来增减
+        if (project.value) {
+          if (newIsCollected && !previousIsCollected) {
+            // 从未收藏变为已收藏，增加1
+            finalCollections = previousCollections + 1
+            project.value.collections = finalCollections
+            console.log('手动增加收藏数，新值:', finalCollections)
+          } else if (!newIsCollected && previousIsCollected) {
+            // 从已收藏变为未收藏，减少1
+            finalCollections = Math.max(0, previousCollections - 1)
+            project.value.collections = finalCollections
+            console.log('手动减少收藏数，新值:', finalCollections)
+          }
+        }
+        console.warn('后端未返回有效的 collections 值，使用本地计算:', data.collections)
+      }
+
+      // 同步更新列表页的数据
+      store.commit('updateProjectInList', {
+        projectId,
+        collections: finalCollections,
+        isCollected: newIsCollected
+      })
+      console.log('已同步更新列表页数据:', { projectId, collections: finalCollections, isCollected: newIsCollected })
+
+      ElMessage.success(isCollected.value ? '已收藏' : '已取消收藏')
+    } else {
+      // 操作失败，恢复之前的状态
+      isCollected.value = previousIsCollected
+      if (project.value) {
+        project.value.collections = previousCollections
+      }
+      throw new Error(response?.message || '收藏操作失败')
+    }
   } catch (error) {
+    console.error('收藏操作失败:', error)
     ElMessage.error(error.message || '切换收藏状态操作失败')
   }
 }
@@ -338,12 +454,46 @@ const handleCollect = async () => {
 const loadProjectDetail = async (id) => {
   isLoading.value = true
   try {
-    project.value = await store.dispatch('getProjectDetail', id)
+    const projectData = await store.dispatch('getProjectDetail', id)
 
-    if (isAuthenticated.value) {
-      await checkCollectionStatus(id)
+    // 调试：打印后端返回的原始数据
+    console.log('项目详情原始数据:', projectData)
+    console.log('后端返回的 collections:', projectData?.collections)
+    
+    // 统一使用 collections 字段，移除 loves 和 stars 字段
+    // 后端返回的 stars 是点赞数，collections 才是收藏数
+    if (projectData) {
+      // 统一使用 collections 字段，移除 loves 和 stars 字段
+      const collectionsValue = (projectData.collections !== undefined && projectData.collections !== null) 
+        ? projectData.collections 
+        : 0
+      
+      // 移除 loves 和 stars 字段，只保留 collections
+      // eslint-disable-next-line no-unused-vars
+      const { loves, stars, ...rest } = projectData
+      
+      project.value = {
+        ...rest,
+        collections: collectionsValue
+      }
+      
+      console.log('最终项目对象:', {
+        name: project.value.name,
+        collections: project.value.collections
+      })
+    } else {
+      project.value = projectData
     }
-    await fetchComments(id)
+
+    // 非核心数据后台加载
+    await Promise.allSettled([
+      isAuthenticated.value ? checkCollectionStatus(id) : Promise.resolve(),
+      fetchComments(id),
+      // 增加浏览量（静默调用，失败不影响主流程）
+      HttpManager.addProjectView(id).catch(err => {
+        console.error('增加项目浏览量失败:', err)
+      })
+    ])
   } catch (error) {
     ElMessage.error('加载项目详情失败')
   } finally {
@@ -355,23 +505,33 @@ const fetchComments = async (projectId) => {
   loadingComments.value = true
   try {
     const response = await HttpManager.getProjectComments(projectId)
-    if (response.code === 200 && response.data) {
-      comments.value = response.data.map(comment => ({
-        ...comment,
-        canDelete: isAuthenticated.value &&
-          (userInfo.value?.id === comment.userId || userInfo.value?.role === 'admin')
-      }))
+    
+    // 兼容两种后端返回格式：{ code: 200, data: [...] } 或 { message: "success", data: [...] }
+    const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+    const commentsData = response?.data || []
+    
+    if (isSuccess && Array.isArray(commentsData)) {
+      comments.value = commentsData.map(comment => {
+        // 映射后端字段到前端期望的字段名
+        return {
+          id: comment.id || comment.comment_Id || comment.commentId,
+          userId: comment.userId || comment.user_id,
+          nickname: comment.nickname || '匿名用户',
+          username: comment.username || '',
+          avatar: comment.avatar || comment.avater || '', // 兼容拼写错误
+          content: comment.content || comment.comment || '',
+          createdAt: comment.createdAt || comment.commentDate || '',
+          likes: comment.likes || comment.love_count || 0,
+          isLiked: comment.isLiked || false,
+          canDelete: isAuthenticated.value &&
+                    (userInfo.value?.id === (comment.userId || comment.user_id) || userInfo.value?.role === 'admin')
+        }
+      })
       updatePagination()
     }
   } catch (error) {
-    console.error('获取评论失败，使用模拟数据:', error)
-    const mockComments = getCommentsByProjectId(parseInt(projectId))
-    comments.value = mockComments.map(comment => ({
-      ...comment,
-      canDelete: isAuthenticated.value &&
-        (userInfo.value?.id === comment.userId || userInfo.value?.role === 'admin')
-    }))
-    updatePagination()
+    console.error('获取评论失败:', error)
+    comments.value = []
   } finally {
     loadingComments.value = false
   }
@@ -384,12 +544,31 @@ const submitComment = async () => {
   }
   submittingComment.value = true
   try {
-    const response = await HttpManager.addProjectComment(project.value.id, {
+    const projectId = project.value?.projectId || project.value?.id
+    if (!projectId) {
+      ElMessage.error('项目ID不存在')
+      return
+    }
+    const response = await HttpManager.addProjectComment(projectId, {
       content: (newComment.value || '').trim()
     })
-    if (response.code === 200 && response.data) {
+    
+    // 兼容两种后端返回格式：{ code: 200, data: {...} } 或 { message: "success", data: {...} }
+    const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+    const commentData = response?.data
+    
+    if (isSuccess && commentData) {
+      // 映射字段，确保字段名正确
       const newCommentData = {
-        ...response.data,
+        id: commentData.id || commentData.comment_Id || commentData.commentId,
+        userId: commentData.userId || commentData.user_id,
+        nickname: commentData.nickname || commentData.username || '匿名用户',
+        username: commentData.username || commentData.nickname || '匿名用户',
+        avatar: commentData.avatar || commentData.avater || '', // 兼容拼写错误
+        content: commentData.content || commentData.comment || '',
+        createdAt: commentData.createdAt || commentData.commentDate || new Date().toISOString(),
+        likes: commentData.likes || commentData.love_count || 0,
+        isLiked: commentData.isLiked || false,
         canDelete: true
       }
       comments.value.unshift(newCommentData)
@@ -397,15 +576,11 @@ const submitComment = async () => {
       newComment.value = ''
       ElMessage.success('评论发表成功')
     } else {
-      throw new Error(response.message || '发表评论失败')
+      throw new Error(response?.message || '发表评论失败')
     }
   } catch (error) {
-    console.error('发布评论失败，使用模拟数据:', error)
-    const newCommentData = addMockProjectComment(project.value.id, newComment.value, 'project')
-    comments.value.unshift({ ...newCommentData })
-    updatePagination()
-    newComment.value = ''
-    ElMessage.success('评论发布成功')
+    console.error('发布评论失败:', error)
+    ElMessage.error(error.message || '发表评论失败，请稍后重试')
   } finally {
     submittingComment.value = false
   }
@@ -419,9 +594,17 @@ const handleDeleteComment = async (commentId) => {
       type: 'warning'
     })
 
-    const response = await HttpManager.deleteProjectComment(project.value.id, commentId)
+    const projectId = project.value?.projectId || project.value?.id
+    if (!projectId) {
+      ElMessage.error('项目ID不存在')
+      return
+    }
+    const response = await HttpManager.deleteProjectComment(projectId, commentId)
 
-    if (response.code === 200) {
+    // 兼容两种后端返回格式：{ code: 200 } 或 { message: "success" }
+    const isSuccess = (response && (response.code === 200 || response.message === 'success' || response.message === 'Comment deleted successfully'))
+    
+    if (isSuccess) {
       const index = comments.value.findIndex(c => c.id === commentId)
       if (index !== -1) {
         comments.value.splice(index, 1)
@@ -429,18 +612,12 @@ const handleDeleteComment = async (commentId) => {
       }
       ElMessage.success('评论已删除')
     } else {
-      throw new Error(response.message || '删除评论失败')
+      throw new Error(response?.message || '删除评论失败')
     }
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除评论失败，使用模拟数据:', error)
-      deleteMockProjectComment(commentId)
-      const index = comments.value.findIndex(c => c.id === commentId)
-      if (index !== -1) {
-        comments.value.splice(index, 1)
-        updatePagination()
-      }
-      ElMessage.success('评论已删除')
+      console.error('删除评论失败:', error)
+      ElMessage.error(error.message || '删除评论失败，请稍后重试')
     }
   }
 }
@@ -451,39 +628,42 @@ const handleLikeComment = async (commentId) => {
     return
   }
   try {
-    const response = await HttpManager.toggleCommentLike(project.value.id, commentId)
-    if (response.code === 200 && response.data) {
+    const projectId = project.value?.projectId || project.value?.id
+    if (!projectId) {
+      ElMessage.error('项目ID不存在')
+      return
+    }
+    const response = await HttpManager.toggleProjectCommentLike(projectId, commentId)
+    
+    // 兼容两种后端返回格式：{ code: 200, data: {...} } 或 { message: "success", data: {...} }
+    const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+    const commentData = response?.data
+    
+    if (isSuccess && commentData) {
       const commentIndex = comments.value.findIndex(c => c.id === commentId)
       if (commentIndex !== -1) {
         const comment = comments.value[commentIndex]
-        const wasLiked = comment.isLiked
+        // 使用后端返回的最新状态，兼容 isLiked 和 isliked 两种字段名
+        const newIsLiked = commentData.isLiked !== undefined ? commentData.isLiked : (commentData.isliked !== undefined ? commentData.isliked : !comment.isLiked)
+        const newLikes = commentData.likes !== undefined ? commentData.likes : comment.likes
+        
         comments.value[commentIndex] = {
           ...comment,
-          likes: wasLiked ? comment.likes - 1 : comment.likes + 1,
-          isLiked: !wasLiked
+          likes: newLikes,
+          isLiked: newIsLiked
         }
         if (sortType.value === 'hot') {
           comments.value = [...comments.value]
         }
       }
-      ElMessage.success(response.data.isLiked ? '已点赞' : '已取消点赞')
+      const finalIsLiked = commentData.isLiked !== undefined ? commentData.isLiked : (commentData.isliked !== undefined ? commentData.isliked : false)
+      ElMessage.success(finalIsLiked ? '已点赞' : '已取消点赞')
     } else {
-      throw new Error(response.message || '操作失败')
+      throw new Error(response?.message || '操作失败')
     }
   } catch (error) {
-    console.error('点赞评论失败，使用模拟数据:', error)
-    toggleLikeMockProjectComment(commentId)
-    const commentIndex = comments.value.findIndex(c => c.id === commentId)
-    if (commentIndex !== -1) {
-      const comment = comments.value[commentIndex]
-      const wasLiked = comment.isLiked
-      comments.value[commentIndex] = {
-        ...comment,
-        likes: wasLiked ? comment.likes - 1 : comment.likes + 1,
-        isLiked: !wasLiked
-      }
-      ElMessage.success('点赞成功')
-    }
+    console.error('点赞评论失败:', error)
+    ElMessage.error(error.message || '点赞操作失败，请稍后重试')
   }
 }
 
@@ -538,6 +718,82 @@ const formatTime = (timeString) => {
       day: '2-digit'
     })
   }
+}
+
+// 处理贡献者头像加载错误
+const handleContributorAvatarError = (event, contributor) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认头像，不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml') || currentSrc.includes('/default-avatar.png')) {
+    return
+  }
+  
+  // 使用贡献者的名称生成默认头像
+  const name = contributor?.name || '贡献者'
+  const defaultAvatarUrl = getUserAvatarUrl('', name, '')
+  
+  event.target.src = defaultAvatarUrl
+}
+
+// 处理发表评论区域的头像加载错误
+const handleCommentAvatarError = (event, comment = null) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认头像，不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml') || currentSrc.includes('/default-avatar.png')) {
+    return
+  }
+  
+  // 如果传入comment，使用comment的昵称；否则使用当前用户信息
+  const name = comment 
+    ? (comment.nickname || '匿名用户')
+    : (userInfo.value?.nickname || userInfo.value?.username || '我')
+  const defaultAvatarUrl = getUserAvatarUrl('', name, '')
+  
+  event.target.src = defaultAvatarUrl
+}
+
+// 处理项目logo加载错误
+const handleLogoError = (event) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标，不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml')) {
+    return
+  }
+  
+  // 生成基于项目名称的默认 SVG 图标
+  const projectName = project.value?.name || '项目'
+  const initial = projectName.charAt(0)
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8']
+  const colorIndex = initial.charCodeAt(0) % colors.length
+  const bgColor = colors[colorIndex]
+  
+  const svg = `
+    <svg width="112" height="112" xmlns="http://www.w3.org/2000/svg">
+      <rect width="112" height="112" fill="${bgColor}" rx="24"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="48" fill="white" text-anchor="middle" dominant-baseline="central" font-weight="bold">${initial}</text>
+    </svg>
+  `.trim()
+  const svgUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
+  
+  event.target.src = svgUrl
+}
+
+// 处理项目图片加载错误
+const handleImageError = (event) => {
+  // 如果图片加载失败，隐藏图片或显示占位符
+  if (event.target) {
+    event.target.style.display = 'none'
+  }
+}
+
+// 打开图片预览（可选功能）
+const openImageModal = (imageUrl, index) => {
+  // 可以在这里实现图片预览功能，比如使用 Element Plus 的 Image 组件
+  // eslint-disable-next-line no-unused-vars
+  console.log('打开图片预览:', imageUrl, index)
 }
 
 // 四、生命周期函数

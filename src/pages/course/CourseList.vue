@@ -200,9 +200,10 @@
           <div @click="showUserMenu = !showUserMenu" class="cursor-pointer relative group">
 
             <!-- 情况 1: 已登录 且 有头像图片 -->
-            <template v-if="isAuthenticated && userInfo?.avatar">
+            <template v-if="isAuthenticated && userInfo">
               <img
-                :src="userInfo.avatar"
+                :src="getUserAvatarUrl(userInfo.avatar, userInfo.nickname, userInfo.username)"
+                @error="handleAvatarError"
                 class="w-10 h-10 rounded-full border-2 border-white shadow-md group-hover:scale-110 transition-transform object-cover"
                 alt="User Avatar"
               >
@@ -252,11 +253,11 @@
               <div class="px-4 py-3 text-xs text-gray-400 bg-gray-50 border-b border-gray-100 cursor-default">
                 当前身份：游客
               </div>
-              <router-link to="/profile" class="block px-4 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                <i class="fas fa-user mr-2 text-blue-500"></i>个人中心
-              </router-link>
+              <div class="block px-4 py-3 text-gray-400 cursor-not-allowed opacity-60">
+                <i class="fas fa-user mr-2"></i>个人中心（请先登录）
+              </div>
               <div class="h-px bg-gray-100 my-1"></div>
-              <div @click="goToLogin" class="block px-4 py-3 text-blue-600 hover:bg-blue-50 font-medium cursor-pointer transition-colors">
+              <div @click.stop="goToLogin" class="block px-4 py-3 text-blue-600 hover:bg-blue-50 font-medium cursor-pointer transition-colors">
                 <i class="fas fa-sign-in-alt mr-2"></i>返回登录
               </div>
             </template>
@@ -353,7 +354,7 @@
                   <i class="far fa-file-alt"></i> {{ course.resources }} 资料
                 </span>
                 <span class="flex items-center gap-1 hover:text-red-500">
-                  <i class="far fa-star"></i> {{ course.likes }}
+                  <i class="far fa-heart"></i> {{ course.collections !== undefined ? course.collections : 0 }}
                 </span>
               </div>
               <i
@@ -387,10 +388,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { HttpManager } from '@/api'
+import { getUserAvatarUrl } from '@/utils/avatar'
 
 const router = useRouter()
 const route = useRoute()
@@ -410,7 +413,9 @@ const engineRef = ref(null)
 const showFilter = ref(false)
 const filterRef = ref(null)
 const teacherFilterSearch = ref('')
-const allTeachers = computed(() => [...new Set(mockCourses.map(c => c.teacher))])
+const courses = ref([])
+const isLoading = ref(false)
+const allTeachers = computed(() => [...new Set(courses.value.map(c => c.teacher).filter(Boolean))])
 const activeType = ref('全部')
 const courseTypes = ['全部', '公必', '专必', '专选', '公选']
 const showUserMenu = ref(false)
@@ -506,7 +511,7 @@ const resetAllFilters = () => {
 
 // --- 修改原有的 filteredList 计算属性 ---
 const filteredList = computed(() => {
-  return mockCourses.filter((course) => {
+  return courses.value.filter((course) => {
     // 1. 关键词搜索
     const keyword = String(searchInput.value || '').toLowerCase()
     const matchKeyword = (searchEngine.value === 'local' && keyword)
@@ -647,7 +652,13 @@ const goToDetail = (courseId) => {
 }
 
 const goToLogin = () => {
-  router.push({ name: 'Login' })
+  // 先关闭下拉菜单
+  showUserMenu.value = false
+  // 然后跳转到登录页，并保存当前路径以便登录后返回
+  router.push({
+    name: 'Login',
+    query: { redirect: router.currentRoute.value.fullPath }
+  })
 }
 
 const handleLogout = async () => {
@@ -657,6 +668,23 @@ const handleLogout = async () => {
     ElMessage.success('已退出登录')
   } catch (error) {
     ElMessage.error('退出登录失败')
+  }
+}
+
+// 处理用户头像加载错误
+const handleAvatarError = (event) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标（SVG），不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml')) {
+    return
+  }
+  
+  // 使用用户信息生成默认头像
+  const defaultAvatar = getUserAvatarUrl('', userInfo.value?.nickname, userInfo.value?.username)
+  
+  if (event.target.src !== defaultAvatar) {
+    event.target.src = defaultAvatar
   }
 }
 
@@ -702,26 +730,55 @@ const semesterOptions = [
 
 const reverseSemesterMap = Object.entries(semesterMap).reduce((acc, [k, v]) => { acc[v] = k; return acc }, {})
 
-const mockCourses = [
-  { id: 101, name: '高等数学 I', code: 'MATH1001', semester: '1-1', type: '公必', teacher: '张老师', credit: 5.0, resources: 12, likes: 45 },
-  { id: 102, name: '程序设计基础', code: 'CS1001', semester: '1-1', type: '专必', teacher: '李老师', credit: 4.0, resources: 28, likes: 102 },
-  { id: 103, name: '思想道德修养', code: 'POLIO1001', semester: '1-1', type: '公必', teacher: '王老师', credit: 2.0, resources: 5, likes: 10 },
-  { id: 104, name: '当代文化研究', code: 'PUB1001', semester: '1-1', type: '公选', teacher: '张老师', credit: 2.0, resources: 5, likes: 80 },
-  { id: 201, name: '高等数学 II', code: 'MATH1002', semester: '1-2', type: '公必', teacher: '张老师', credit: 5.0, resources: 15, likes: 38 },
-  { id: 202, name: '线性代数', code: 'MATH1003', semester: '1-2', type: '公必', teacher: '赵老师', credit: 3.0, resources: 20, likes: 88 },
-  { id: 203, name: '离散数学', code: 'CS1002', semester: '1-2', type: '专必', teacher: '钱老师', credit: 4.0, resources: 35, likes: 150 },
-  { id: 204, name: '体育2', code: 'PE1002', semester: '1-2', type: '公必', teacher: '张老师', credit: 1.0, resources: 5, likes: 180 },
-  { id: 301, name: '数据结构与算法', code: 'CS2001', semester: '2-1', type: '专必', teacher: '孙老师', credit: 5, resources: 56, likes: 230 },
-  { id: 302, name: '计算机组成原理', code: 'CS2002', semester: '2-1', type: '专必', teacher: '周老师', credit: 4.0, resources: 30, likes: 95 },
-  { id: 303, name: 'Python应用开发', code: 'CS2005', semester: '2-1', type: '专选', teacher: '吴老师', credit: 2.0, resources: 18, likes: 67 },
-  { id: 401, name: '操作系统', code: 'CS2003', semester: '2-2', type: '专必', teacher: '郑老师', credit: 4.0, resources: 42, likes: 180 },
-  { id: 402, name: '计算机网络', code: 'CS2004', semester: '2-2', type: '专必', teacher: '冯老师', credit: 4.0, resources: 38, likes: 160 },
-  { id: 501, name: '计算机网络', code: 'CS3001', semester: '3-1', type: '专必', teacher: '马老师', credit: 3.0, resources: 18, likes: 120 },
-  { id: 502, name: '数据库系统概论', code: 'CS3002', semester: '3-1', type: '专必', teacher: '刘老师', credit: 3.5, resources: 25, likes: 140 },
-  { id: 601, name: '软件工程导论', code: 'CS3003', semester: '3-2', type: '专选', teacher: '毛老师', credit: 2.0, resources: 22, likes: 80 },
-  { id: 701, name: '人工智能导论', code: 'CS4001', semester: '4-1', type: '专选', teacher: '林老师', credit: 2.0, resources: 15, likes: 90 },
-  { id: 702, name: '毕业设计', code: 'CS4002', semester: '4-2', type: '专必', teacher: '何老师', credit: 6.0, resources: 10, likes: 50 }
-]
+// 从后端获取课程列表
+const fetchCourses = async () => {
+  try {
+    isLoading.value = true
+    const response = await HttpManager.getCourses({ limit: 1000, cursor: 0 })
+    console.log('[CourseList] 后端返回的完整响应:', response)
+    
+    if (response && response.courses_agg) {
+      console.log('[CourseList] 原始课程数据（前3个）:', response.courses_agg.slice(0, 3).map(c => ({
+        id: c.id,
+        courseId: c.courseId,
+        name: c.name,
+        collections: c.collections,
+        likes: c.likes,
+        loves: c.loves
+      })))
+      
+      // 确保每个课程都有 collections 字段（收藏数）
+      courses.value = response.courses_agg.map(course => {
+        // 优先使用 collections 字段（从 collections 表实时统计）
+        // 注意：collections 是收藏数，likes/loves 是点赞数，两者不同
+        const collections = course.collections !== undefined && course.collections !== null 
+          ? Number(course.collections)  // 确保是数字类型
+          : 0  // 如果后端没有返回 collections，默认为 0（不使用 likes 作为备用）
+        
+        return {
+          ...course,
+          collections: collections,  // 收藏数（从 collections 表实时统计）
+          // likes 和 loves 保持原值（点赞数，不是收藏数）
+          likes: course.likes !== undefined ? course.likes : (course.loves !== undefined ? course.loves : 0)
+        }
+      })
+      
+      console.log('[CourseList] 处理后的课程数据（前3个）:', courses.value.slice(0, 3).map(c => ({
+        id: c.id,
+        name: c.name,
+        collections: c.collections,
+        likes: c.likes
+      })))
+    } else {
+      console.warn('[CourseList] 响应格式不正确:', response)
+    }
+  } catch (error) {
+    console.error('获取课程列表失败:', error)
+    ElMessage.error('获取课程列表失败，请稍后重试')
+  } finally {
+    isLoading.value = false
+  }
+}
 
 const groupedCourses = computed(() => {
   const order = ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2', '4-1', '4-2']
@@ -750,7 +807,93 @@ const scrollToSemester = (val) => {
 
 watch(() => route.query.semester, (val) => val && scrollToSemester(val), { immediate: true })
 
-onMounted(() => document.addEventListener('click', closeDropdowns))
+// 监听路由变化，当从详情页返回时刷新课程列表
+// 监听路由变化，当从详情页返回时刷新课程列表
+watch(() => route.path, async (newPath, oldPath) => {
+  // 如果从详情页返回到列表页，刷新数据以更新收藏数
+  // 支持路径格式：/course/detail/:id
+  const isFromDetail = oldPath && oldPath.startsWith('/course/detail/')
+  const isToList = newPath === '/course' || newPath === '/course/list' || newPath.startsWith('/course?')
+  
+  if (isFromDetail && isToList) {
+    console.log('从课程详情页返回，刷新课程列表', { oldPath, newPath })
+    await fetchCourses()
+  }
+}, { immediate: false })
+
+// 使用 onActivated 钩子（如果使用了 keep-alive）
+// 当从详情页返回时，也会触发这个钩子
+onActivated(() => {
+  // 如果是从详情页返回，刷新数据
+  const currentPath = route.path
+  if (currentPath === '/course' || currentPath === '/course/list' || currentPath.startsWith('/course?')) {
+    console.log('课程列表页被激活，刷新数据', { path: currentPath })
+    fetchCourses()
+  }
+})
+
+// 监听 Vuex store 中的课程更新（用于实时更新收藏数）
+// 当详情页更新收藏数时，同步更新列表页的数据
+// 注意：暂时禁用这个监听，避免用 store 中的旧数据覆盖后端返回的正确数据
+// 如果需要实时更新，应该在详情页操作后直接调用 fetchCourses() 刷新数据
+// watch(() => store.state.home.courses, (newCourses) => {
+//   if (newCourses && Array.isArray(newCourses) && courses.value.length > 0) {
+//     // 遍历本地课程列表，如果 store 中有对应的更新，则同步更新
+//     newCourses.forEach(storeCourse => {
+//       const localCourse = courses.value.find(c => 
+//         (c.id === storeCourse.id) || 
+//         (c.courseId === storeCourse.courseId) || 
+//         (c.course_id === storeCourse.course_id) ||
+//         (c.id === storeCourse.courseId) ||
+//         (c.courseId === storeCourse.id)
+//       )
+//       if (localCourse && storeCourse.collections !== undefined) {
+//         localCourse.collections = storeCourse.collections
+//         // 如果 likes 字段被用作收藏数显示，也更新它
+//         if (storeCourse.likes !== undefined && storeCourse.likes === storeCourse.collections) {
+//           localCourse.likes = storeCourse.likes
+//         }
+//         console.log('已同步更新本地课程数据:', { id: localCourse.id, name: localCourse.name, collections: localCourse.collections })
+//       }
+//     })
+//   }
+// }, { deep: true })
+
+// 直接更新本地课程数据的函数（供详情页调用）
+const updateCourseInLocalList = (courseId, collections) => {
+  const course = courses.value.find(c => 
+    (c.id === courseId) || 
+    (c.courseId === courseId) || 
+    (c.course_id === courseId) ||
+    (String(c.id) === String(courseId)) ||
+    (String(c.courseId) === String(courseId))
+  )
+  if (course && collections !== undefined) {
+    const oldCollections = course.collections
+    course.collections = collections
+    // 如果 likes 字段被用作收藏数显示，也更新它
+    course.likes = collections
+    console.log('已直接更新本地课程数据:', { 
+      id: course.id, 
+      name: course.name, 
+      oldCollections, 
+      newCollections: course.collections,
+      courseId 
+    })
+  } else {
+    console.warn('未找到要更新的课程:', { courseId, coursesCount: courses.value.length })
+  }
+}
+
+// 将更新函数暴露给全局，供详情页调用
+if (typeof window !== 'undefined') {
+  window.updateCourseInLocalList = updateCourseInLocalList
+}
+
+onMounted(async () => {
+  document.addEventListener('click', closeDropdowns)
+  await fetchCourses()
+})
 onUnmounted(() => document.removeEventListener('click', closeDropdowns))
 </script>
 

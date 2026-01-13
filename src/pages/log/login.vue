@@ -107,6 +107,10 @@ onMounted(() => {
   document.body.style.position = 'fixed'
   document.body.style.width = '100%'
   changeIndex('登录')
+  
+  // 移除自动跳转逻辑，允许用户重新登录
+  // 如果用户已经有有效的 token，可以在登录成功后自动跳转
+  // 但在这里不要强制跳转，让用户能够重新登录
 })
 
 onBeforeUnmount(() => {
@@ -130,26 +134,146 @@ const handleLoginIn = () => {
   loginFormRef.value.validate((valid) => {
     if (valid) {
       loading.value = true
-      const params = new URLSearchParams()
-      params.append('username', loginForm.username)
-      params.append('password', loginForm.password)
+      // 直接传递对象，post函数会自动转换为URLSearchParams
+      const params = {
+        username_or_email: loginForm.username,
+        password: loginForm.password
+      }
 
       HttpManager.loginIn(params)
         .then(res => {
-          if (res.code === 1) {
+          console.log('登录响应:', res)
+          // 后端返回格式：{ message: "1", "JWT token": "..." } 或 { code: 200, token: "..." }
+          const token = res['JWT token'] || res.token || res.data?.token
+          const isSuccess = res.message === '1' || res.code === 1 || res.code === 200 || token
+          
+          console.log('提取的token:', token)
+          console.log('登录是否成功:', isSuccess)
+          
+          if (isSuccess && token) {
+            // 保存token
+            localStorage.setItem('token', token)
+            store.commit('setToken', token)
+            store.commit('setLoginIn', true)
+            
             ElMessage({
               message: '登录成功',
               type: 'success'
             })
-            setUserMsg(res.userMsg[0])
-            store.commit('setLoginIn', true)
-            setTimeout(() => {
-              changeIndex('首页')
-              router.push({ path: '/' })
-              location.reload() // 如果需要强制刷新页面
-            }, 2000)
+            
+            // 立即跳转，不等待获取用户信息（避免空白页）
+            loading.value = false
+            changeIndex('首页')
+            
+            // 检查是否有redirect参数，如果有就跳转到那里，否则跳转到首页
+            const query = router.currentRoute.value.query
+            let targetPath = '/home'
+            
+            // 确保redirect是字符串
+            if (query && query.redirect) {
+              const redirect = query.redirect
+              if (typeof redirect === 'string') {
+                targetPath = redirect
+              } else if (Array.isArray(redirect) && redirect.length > 0) {
+                targetPath = redirect[0]
+              }
+            }
+            
+            // 使用字符串路径，确保不会传递对象
+            router.push(targetPath).catch((err) => {
+              // 如果跳转失败（比如目标路径不存在），跳转到首页
+              console.warn('跳转失败，重定向到首页:', err)
+              router.push('/home')
+            })
+            
+            // 后台获取用户信息（不阻塞跳转）
+            store.dispatch('fetchUserProfile').catch((error) => {
+              console.warn('获取用户信息失败:', error)
+              // 不影响登录状态，用户已经登录成功
+            })
           } else {
-            notify('用户名或密码错误', 'error')
+            notify(res.message || '用户名或密码错误', 'error')
+            loading.value = false
+          }
+        })
+        .catch(error => {
+          console.error('登录错误:', error)
+          console.error('错误详情:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message,
+            config: error.config
+          })
+          
+          // 详细打印错误响应数据
+          if (error.response?.data) {
+            console.error('后端返回的错误数据:', JSON.stringify(error.response.data, null, 2))
+            console.error('错误消息字段:', error.response.data.message)
+          }
+          
+          loading.value = false
+          
+          // 处理401错误（用户名或密码错误）
+          if (error.response?.status === 401) {
+            const errorData = error.response?.data
+            let errorMsg = '登录失败'
+            
+            // 尝试从不同格式的响应中提取错误信息
+            if (errorData) {
+              console.log('errorData类型:', typeof errorData)
+              console.log('errorData内容:', errorData)
+              
+              if (typeof errorData === 'string') {
+                try {
+                  const parsed = JSON.parse(errorData)
+                  errorMsg = parsed.message || errorMsg
+                  console.log('解析后的错误消息:', errorMsg)
+                } catch (e) {
+                  errorMsg = errorData || errorMsg
+                  console.log('使用原始字符串:', errorMsg)
+                }
+              } else if (errorData.message) {
+                errorMsg = errorData.message
+                console.log('从message字段获取:', errorMsg)
+              } else {
+                console.log('errorData结构:', Object.keys(errorData))
+              }
+            }
+            
+            // 显示更明显的错误提示
+            ElMessage({
+              message: errorMsg,
+              type: 'error',
+              duration: 4000,
+              showClose: true
+            })
+          } else {
+            // 其他错误
+            const errorData = error.response?.data
+            let errorMsg = '登录失败，请重试'
+            
+            if (errorData) {
+              if (typeof errorData === 'string') {
+                try {
+                  const parsed = JSON.parse(errorData)
+                  errorMsg = parsed.message || errorMsg
+                } catch (e) {
+                  errorMsg = errorData || errorMsg
+                }
+              } else if (errorData.message) {
+                errorMsg = errorData.message
+              }
+            } else if (error.message) {
+              errorMsg = error.message
+            }
+            
+            // 显示更明显的错误提示
+            ElMessage({
+              message: errorMsg,
+              type: 'error',
+              duration: 4000,
+              showClose: true
+            })
           }
         })
         // .catch(failResponse => {
@@ -164,11 +288,6 @@ const handleLoginIn = () => {
   })
 }
 
-const setUserMsg = (item) => {
-  store.commit('setUserId', item.id)
-  store.commit('setUsername', item.username)
-  store.commit('setAvatar', item.avatar)
-}
 
 const goSignUp = () => {
   router.push({ path: '/register' })

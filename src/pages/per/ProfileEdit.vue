@@ -23,12 +23,9 @@
           <!-- 头像区域 -->
           <div class="avatar-section">
             <div class="avatar-container">
-              <img :src="user.avatar || randomAvatarUrl" alt="头像" class="avatar-image">
+              <img :src="getAvatarUrl()" alt="头像" class="avatar-image">
               <div class="avatar-status"></div>
               <div class="avatar-actions">
-                <button @click="refreshAvatar" class="avatar-action-btn" title="随机头像">
-                  <i class="fas fa-random"></i>
-                </button>
                 <button @click="editAvatar" class="avatar-action-btn" title="上传头像">
                   <i class="fas fa-pencil-alt"></i>
                 </button>
@@ -125,6 +122,15 @@
               </label>
               <input v-model="user.email" type="email" class="form-input" placeholder="请输入邮箱地址">
             </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                <i class="fas fa-image"></i>
+                头像URL
+              </label>
+              <input v-model="user.avatar" type="url" class="form-input" placeholder="请输入头像图片URL（留空则使用默认头像）">
+              <div class="form-hint">留空将使用默认头像（昵称第一个字）</div>
+            </div>
           </div>
         </div>
       </div>
@@ -136,124 +142,36 @@
             <i class="fas fa-edit"></i>
             个人简介
           </h2>
+          <button @click="saveProfile" class="save-btn">
+            <i class="fas fa-save"></i>
+            保存修改
+          </button>
         </div>
         <div class="section-card">
           <div class="form-group full-width">
-            <textarea v-model="user.description"
+            <textarea v-model="editingDescription"
                       class="form-textarea"
                       rows="4"
                       placeholder="介绍一下自己吧...（不超过200字）"
                       maxlength="200"></textarea>
-            <div class="char-count">{{ user.description?.length || 0 }}/200</div>
+            <div class="char-count">{{ editingDescription?.length || 0 }}/200</div>
           </div>
         </div>
       </div>
 
-      <!-- 头像设置 -->
-      <div class="section-container">
-        <div class="section-header">
-          <h2 class="section-title-text">
-            <i class="fas fa-portrait"></i>
-            头像设置
-          </h2>
-        </div>
-        <div class="section-card">
-          <div class="avatar-options">
-            <div class="option-group">
-              <label class="option-label">
-                <input type="radio" v-model="avatarType" value="random" class="option-radio">
-                <div class="option-card">
-                  <div class="option-icon">
-                    <i class="fas fa-random"></i>
-                  </div>
-                  <div class="option-content">
-                    <h4>随机头像</h4>
-                    <p>每次刷新获取新头像</p>
-                    <button @click.stop="refreshAvatar" class="refresh-btn-small">
-                      <i class="fas fa-redo"></i> 换一张
-                    </button>
-                  </div>
-                </div>
-              </label>
-
-              <label class="option-label">
-                <input type="radio" v-model="avatarType" value="custom" class="option-radio">
-                <div class="option-card">
-                  <div class="option-icon">
-                    <i class="fas fa-upload"></i>
-                  </div>
-                  <div class="option-content">
-                    <h4>自定义头像</h4>
-                    <p>上传你自己的头像</p>
-                    <button @click="editAvatar" class="refresh-btn-small">
-                      <i class="fas fa-redo"></i> 换一张
-                    </button>
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 封面设置 -->
-      <div class="section-container">
-        <div class="section-header">
-          <h2 class="section-title-text">
-            <i class="fas fa-image"></i>
-            封面设置
-          </h2>
-        </div>
-        <div class="section-card">
-          <div class="cover-options">
-            <div class="option-group">
-              <label class="option-label">
-                <input type="radio" v-model="coverType" value="random" class="option-radio">
-                <div class="option-card">
-                  <div class="option-icon">
-                    <i class="fas fa-random"></i>
-                  </div>
-                  <div class="option-content">
-                    <h4>随机封面</h4>
-                    <p>每次刷新获取新封面</p>
-                    <button @click.stop="refreshCover" class="refresh-btn-small">
-                      <i class="fas fa-redo"></i> 换一张
-                    </button>
-                  </div>
-                </div>
-              </label>
-
-              <label class="option-label">
-                <input type="radio" v-model="coverType" value="custom" class="option-radio">
-                <div class="option-card">
-                  <div class="option-icon">
-                    <i class="fas fa-upload"></i>
-                  </div>
-                  <div class="option-content">
-                    <h4>自定义封面</h4>
-                    <p>上传你自己的封面</p>
-                    <button @click="editCover" class="refresh-btn-small">
-                      <i class="fas fa-redo"></i> 换一张
-                    </button>
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- 头像设置（已移至基础信息中） -->
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { getUserAvatarUrl } from '@/utils/avatar'
 
 const store = useStore()
 const avatarType = ref('random')
-const coverType = ref('random')
 
 // 使用store中的用户信息
 const user = ref({
@@ -265,6 +183,9 @@ const user = ref({
   avatar: '',
   cover: ''
 })
+
+// 编辑中的个人简介（与显示值分离，只有保存后才更新显示值）
+const editingDescription = ref('')
 
 const stats = ref({
   followers: 0,
@@ -328,12 +249,15 @@ const useRandomImages = () => {
 }
 
 const {
-  randomAvatarUrl,
   randomCoverUrl,
-  generateRandomAvatar,
   generateRandomCover,
   generateBoth
 } = useRandomImages()
+
+// 获取头像URL：如果有自定义头像就使用，否则使用默认头像
+const getAvatarUrl = () => {
+  return getUserAvatarUrl(user.value.avatar, user.value.nickname, user.value.username)
+}
 
 onMounted(async () => {
   generateBoth()
@@ -342,61 +266,69 @@ onMounted(async () => {
   const token = localStorage.getItem('token')
   if (token) {
     try {
-      const response = await store.dispatch('fetchUserProfile')
-      if (response.data) {
-        user.value = response.data
+      // fetchUserProfile 返回的是 User 对象本身，不是 {data: User}
+      const userData = await store.dispatch('fetchUserProfile')
+      if (userData && (userData.id || userData.username)) {
+        user.value = userData
+        // 初始化编辑中的个人简介为当前值
+        editingDescription.value = userData.description || ''
 
         // 设置头像类型
+        // 如果头像URL是 placeholder.com 相关的无效URL，清空它
         if (user.value.avatar) {
+          const trimmedUrl = user.value.avatar.trim()
+          const isInvalidUrl = 
+            trimmedUrl.includes('via.placeholder.com') ||
+            trimmedUrl.includes('placeholder.com') ||
+            trimmedUrl.includes('150?text=')
+          
+          if (isInvalidUrl) {
+            // 清空无效的头像URL
+            user.value.avatar = ''
+            avatarType.value = 'default'
+          } else {
           avatarType.value = 'custom'
         }
-        // 设置封面类型
-        if (user.value.cover) {
-          coverType.value = 'custom'
+        }
+      } else {
+        // 如果获取失败，使用 store 中的用户信息
+        if (store.state.user && store.state.user.id) {
+          user.value = { ...store.state.user }
         }
       }
     } catch (error) {
       console.error('获取用户资料失败:', error)
-      ElMessage.error('获取用户资料失败')
+      // 401错误已经在fetchUserProfile中处理了，这里只显示提示
+      if (error.response?.status !== 401) {
+        ElMessage.error('获取用户资料失败，请刷新页面重试')
+        // 使用 store 中的用户信息作为后备
+        if (store.state.user && store.state.user.id) {
+          user.value = { ...store.state.user }
+          // 初始化编辑中的个人简介为当前值
+          editingDescription.value = store.state.user.description || ''
+        }
+      }
     }
   }
 })
 
-// 监听头像类型变化
-watch(avatarType, (newVal) => {
-  if (newVal === 'random') {
-    user.value.avatar = generateRandomAvatar()
-  }
-})
-
-// 监听封面类型变化
-watch(coverType, (newVal) => {
-  if (newVal === 'random') {
-    user.value.cover = generateRandomCover()
-  }
-})
-
-const refreshAvatar = () => {
-  if (avatarType.value === 'random') {
-    user.value.avatar = generateRandomAvatar()
-    ElMessage.success('已刷新随机头像')
-  } else {
-    generateRandomAvatar()
-    ElMessage.info('已生成新的随机头像，切换类型即可使用')
-  }
-}
+// 监听头像类型变化（移除随机头像功能，只保留自定义头像URL）
+// watch(avatarType, (newVal) => {
+//   if (newVal === 'random') {
+//     user.value.avatar = generateRandomAvatar()
+//   }
+// })
 
 const refreshCover = () => {
-  if (coverType.value === 'random') {
     user.value.cover = generateRandomCover()
     ElMessage.success('已刷新随机封面')
-  } else {
-    generateRandomCover()
-    ElMessage.info('已生成新的随机封面，切换类型即可使用')
-  }
 }
 
 const editAvatar = () => {
+  // 提示用户在基础信息中填写头像URL
+  ElMessage.info('请在"基础信息"中填写头像URL，或上传图片后复制图片URL填入')
+  
+  // 可选：保留文件上传功能，上传后自动填入URL
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/*'
@@ -410,9 +342,10 @@ const editAvatar = () => {
 
       const reader = new FileReader()
       reader.onload = (e) => {
+        // 将base64数据URL填入头像URL字段
         user.value.avatar = e.target.result
         avatarType.value = 'custom'
-        ElMessage.success('头像上传成功')
+        ElMessage.success('头像已上传，请点击"保存修改"保存')
       }
       reader.readAsDataURL(file)
     }
@@ -435,7 +368,6 @@ const editCover = () => {
       const reader = new FileReader()
       reader.onload = (e) => {
         user.value.cover = e.target.result
-        coverType.value = 'custom'
         ElMessage.success('封面上传成功')
       }
       reader.readAsDataURL(file)
@@ -459,14 +391,29 @@ const saveProfile = async () => {
     const profileData = {
       nickname: user.value.nickname,
       email: user.value.email || '',
-      description: user.value.description || '',
-      avatar: user.value.avatar || '',
+      description: editingDescription.value || '', // 使用编辑中的个人简介
+      avatar: user.value.avatar?.trim() || '', // 保存头像URL，如果为空则使用默认头像
       face_photo: user.value.cover || ''
     }
 
     const response = await store.dispatch('updateUserProfile', profileData)
     if (response.success) {
+      // 显示中文成功消息，忽略后端返回的英文消息
       ElMessage.success('个人资料保存成功')
+      // 更新本地 user 对象，确保显示同步
+      if (response.data) {
+        user.value = { ...user.value, ...response.data }
+        // 保存成功后，同步更新显示的个人简介
+        user.value.description = editingDescription.value
+      } else {
+        // 如果后端没有返回完整用户信息，重新获取
+        const userData = await store.dispatch('fetchUserProfile')
+        if (userData && (userData.id || userData.username)) {
+          user.value = userData
+          // 保存成功后，同步更新显示的个人简介
+          user.value.description = editingDescription.value
+        }
+      }
     } else {
       ElMessage.error(response.message || '保存失败')
     }
@@ -845,7 +792,14 @@ const validateEmail = (email) => {
   margin-top: 4px;
 }
 
-.avatar-options, .cover-options {
+.form-hint {
+  font-size: 12px;
+  color: #718096;
+  margin-top: 6px;
+  font-style: italic;
+}
+
+.avatar-options {
   .option-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

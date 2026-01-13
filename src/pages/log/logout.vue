@@ -75,7 +75,7 @@ export default {
         })
 
         setTimeout(() => {
-          this.$router.push('/login')
+          this.$router.push({ name: 'Login' })
         }, 1500)
       } catch (error) {
         console.error('退出登录失败:', error)

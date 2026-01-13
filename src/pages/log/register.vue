@@ -215,7 +215,7 @@ const handleRegister = () => {
       const res = await HttpManager.SignUp(params)
       if (res.code === 1) {
         ElMessage.success('注册成功！即将跳转登录')
-        setTimeout(() => router.push('/login'), 2000)
+        setTimeout(() => router.push({ name: 'Login' }), 2000)
       } else {
         notify(res.message || '注册失败')
       }

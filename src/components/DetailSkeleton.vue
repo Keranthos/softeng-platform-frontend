@@ -131,3 +131,7 @@
       </div>
     </div>
 </template>
+
+<script setup>
+// 骨架屏组件
+</script>

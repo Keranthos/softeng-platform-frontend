@@ -29,23 +29,23 @@ export default createStore({
       showAddMenu: false,
       dropdownOpen: false,
       engineMenuOpen: false,
-      searchEngine: 'https://www.baidu.com/s?wd=',
+      searchEngine: 'local',
       searchInput: '',
       today: '',
       weekday: '',
       currentTime: '',
       // 首页数据
       commonSites: [
-        { name: '微信文件', url: 'https://file.fengfengzhidao.com', icon: 'https://file.fengfengzhidao.com/logo/wechat.png', desc: '快速传输文件到设备' },
-        { name: '和风天气', url: 'https://www.qweather.com', icon: 'https://cdn.heweather.com/img/logo.png', desc: '实时天气预报服务' },
-        { name: '小红书', url: 'https://www.xiaohongshu.com', icon: 'https://ci.xiaohongshu.com/logo_2023.png', desc: '生活方式分享社区' },
-        { name: '哔哩哔哩', url: 'https://www.bilibili.com', icon: 'https://www.bilibili.com/favicon.ico', desc: '视频弹幕网站' },
-        { name: '知乎', url: 'https://www.zhihu.com', icon: 'https://static.zhihu.com/static/favicon.ico', desc: '高质量问答平台' },
-        { name: '百度翻译', url: 'https://fanyi.baidu.com', icon: 'https://fanyi.bdstatic.com/static/translation/img/favicon.ico', desc: '多语言翻译工具' },
-        { name: '淘宝', url: 'https://www.taobao.com', icon: 'https://www.taobao.com/favicon.ico', desc: '在线购物平台' },
-        { name: '抖音', url: 'https://www.douyin.com', icon: 'https://lf1-cdn2-tos.bytego.com/obj/ies-fe-bee-prod/cn/fe/bee_prod_cn_bee_home_page_logo.png', desc: '短视频分享应用' },
-        { name: '京东', url: 'https://www.jd.com', icon: 'https://www.jd.com/favicon.ico', desc: '电商购物网站' },
-        { name: '微博', url: 'https://www.weibo.com', icon: 'https://weibo.com/favicon.ico', desc: '社交媒体平台' }
+        { name: '微信文件', url: 'https://file.fengfengzhidao.com', icon: '/uploads/images/common/微信文件.jpg', desc: '快速传输文件到设备' },
+        { name: '和风天气', url: 'https://www.qweather.com', icon: '/uploads/images/common/和风天气.png', desc: '实时天气预报服务' },
+        { name: '小红书', url: 'https://www.xiaohongshu.com', icon: '/uploads/images/common/小红书.jpeg', desc: '生活方式分享社区' },
+        { name: '哔哩哔哩', url: 'https://www.bilibili.com', icon: '/uploads/images/common/哔哩哔哩_739519e278e6.ico', desc: '视频弹幕网站' },
+        { name: '知乎', url: 'https://www.zhihu.com', icon: '/uploads/images/common/知乎_2e9c10f8e45e.ico', desc: '高质量问答平台' },
+        { name: '百度翻译', url: 'https://fanyi.baidu.com', icon: '/uploads/images/common/百度翻译.jpeg', desc: '多语言翻译工具' },
+        { name: '淘宝', url: 'https://www.taobao.com', icon: '/uploads/images/common/淘宝_65940af649c6.ico', desc: '在线购物平台' },
+        { name: '抖音', url: 'https://www.douyin.com', icon: '/uploads/images/common/抖音.png', desc: '短视频分享应用' },
+        { name: '京东', url: 'https://www.jd.com', icon: '/uploads/images/common/京东_828c0d051f11.ico', desc: '电商购物网站' },
+        { name: '微博', url: 'https://www.weibo.com', icon: '/uploads/images/common/微博_c4814f45f6c0.ico', desc: '社交媒体平台' }
       ],
       tools: [
         { name: 'DeepL', url: 'https://www.deepl.com', icon: 'https://www.deepl.com/img/logo/deepl-logo-blue.svg', desc: '高精度翻译工具' },
@@ -72,7 +72,7 @@ export default createStore({
         { name: 'W3School', url: 'https://www.w3school.com.cn', icon: 'https://www.w3school.com.cn/favicon.ico', desc: 'Web技术教程' }
       ],
       projects: [
-        { name: '项目管理', url: '/admin/projects', icon: 'https://fakeicon.com/project.svg', desc: '管理所有项目' },
+        { name: '项目管理', url: '/projects', icon: 'https://fakeicon.com/project.svg', desc: '管理所有项目' },
         { name: '任务看板', url: '/kanban', icon: 'https://fakeicon.com/kanban.svg', desc: '可视化任务跟踪' },
         { name: '代码仓库', url: '/repo', icon: 'https://fakeicon.com/repo.svg', desc: '代码存储与协作' },
         { name: '文档中心', url: '/docs', icon: 'https://fakeicon.com/docs.svg', desc: '项目文档库' },
@@ -103,12 +103,12 @@ export default createStore({
         { id: 'audit', name: '审核中心', icon: 'fa-gavel', adminOnly: true, route: '/check/audit' }
       ],
       engines: [
+        { name: '本站', value: 'local' },
         { name: '百度', value: 'https://www.baidu.com/s?wd=' },
         { name: '搜狗', value: 'https://www.sogou.com/web?query=' },
         { name: 'Google', value: 'https://www.google.com/search?q=' },
         { name: 'Bing', value: 'https://cn.bing.com/search?q=' },
-        { name: '知乎', value: 'https://www.zhihu.com/search?q=' },
-        { name: '本站', value: '/search?q=' }
+        { name: '知乎', value: 'https://www.zhihu.com/search?q=' }
       ]
     },
 
@@ -287,6 +287,21 @@ export default createStore({
       state.home.currentTime = currentTime
     },
 
+    // 设置首页工具数据（精选工具）
+    setHomeTools(state, tools) {
+      state.home.tools = tools
+    },
+
+    // 设置首页课程数据（课程浏览）
+    setHomeCourses(state, courses) {
+      state.home.course = courses
+    },
+
+    // 设置首页项目数据（项目情况）
+    setHomeProjects(state, projects) {
+      state.home.projects = projects
+    },
+
     // ============ 项目相关 ============
     setProjectsList(state, list) {
       state.projects.projectsList = list
@@ -306,6 +321,55 @@ export default createStore({
 
     setProjectsSearchResults(state, results) {
       state.projects.searchResults = results
+    },
+
+    // 更新项目列表中的某个项目的收藏数和收藏状态
+    updateProjectInList(state, { projectId, collections, isCollected }) {
+      const project = state.projects.projectsList.find(p => (p.id === projectId || p.projectId === projectId))
+      if (project) {
+        if (collections !== undefined) {
+          project.collections = collections
+        }
+        if (isCollected !== undefined) {
+          project.iscollected = isCollected
+          project.isCollected = isCollected
+        }
+      }
+      // 同时更新搜索结果中的数据
+      const searchProject = state.projects.searchResults.find(p => (p.id === projectId || p.projectId === projectId))
+      if (searchProject) {
+        if (collections !== undefined) {
+          searchProject.collections = collections
+        }
+        if (isCollected !== undefined) {
+          searchProject.iscollected = isCollected
+          searchProject.isCollected = isCollected
+        }
+      }
+    },
+
+    // 更新课程列表中的某个课程的收藏数和收藏状态
+    updateCourseInList(state, { courseId, likes, collections, isCollected }) {
+      // 更新首页课程数据
+      if (state.home.courses && Array.isArray(state.home.courses)) {
+        const course = state.home.courses.find(c => (c.id === courseId || c.courseId === courseId || c.course_id === courseId))
+        if (course) {
+          // 优先使用 collections 字段（收藏数）
+          if (collections !== undefined) {
+            course.collections = collections
+            // 如果 likes 字段被用作收藏数显示，也更新它
+            course.likes = collections
+          } else if (likes !== undefined) {
+            // 兼容旧代码，如果只传了 likes
+            course.likes = likes
+            course.collections = likes
+          }
+          if (isCollected !== undefined) {
+            course.iscollected = isCollected
+            course.isCollected = isCollected
+          }
+        }
+      }
     },
 
     setProjectsActiveFilters(state, filters) {
@@ -445,21 +509,56 @@ export default createStore({
     // 获取用户资料
     async fetchUserProfile({ commit, state }) {
       try {
-        const response = await HttpManager.getUserProfile(state.token)
-        if ((response.islogin || response.code === 200) && response.data) {
-          commit('setUserInfo', response.data)
+        // 确保使用最新的token（从localStorage或state）
+        const token = state.token || localStorage.getItem('token')
+        if (!token) {
+          throw new Error('未找到token，请重新登录')
+        }
+        
+        const response = await HttpManager.getUserProfile()
+        
+        // 后端返回格式：response.Success(c, profile) 直接返回User对象
+        // axios会自动解析JSON，所以response.data就是User对象
+        // 但由于我们的get函数已经返回了response.data，所以response本身就是User对象
+        let userData = response
+        
+        // 如果response有data字段，说明被包装了（可能是错误情况），使用data
+        if (response && response.data && typeof response.data === 'object' && (response.data.id || response.data.username)) {
+          userData = response.data
+        }
+        
+        // 检查是否是有效的User对象
+        const isSuccess = userData && (userData.id || userData.username)
+        
+        if (isSuccess && userData) {
+          // 映射后端字段名（兼容拼写错误 avater）
+          const mappedUserData = {
+            ...userData,
+            avatar: userData.avatar || userData.avater || '', // 兼容拼写错误
+            nickname: userData.nickname || userData.username || '', // 如果昵称为空，使用用户名
+            username: userData.username || ''
+          }
+          commit('setUserInfo', mappedUserData)
           commit('setLoginIn', true)
           commit('setToolsIsAuthenticated', true)
-          return response.data
+          return mappedUserData
         } else {
-          commit('setLoginIn', false)
-          commit('setToolsIsAuthenticated', false)
+          // 响应格式不对，但不一定是401错误，不要清除登录状态
+          // 可能是网络问题或数据格式问题，保留当前登录状态
+          console.warn('获取用户资料失败：响应格式不正确', response)
+          // 不清除登录状态，只返回null，让调用者自己处理
           return null
         }
       } catch (error) {
         console.error('获取用户资料错误:', error)
-        commit('setLoginIn', false)
-        commit('setToolsIsAuthenticated', false)
+        // 只有在明确的401错误时才清除登录状态
+        if (error.response?.status === 401) {
+          commit('setToken', '')
+          commit('setLoginIn', false)
+          commit('setToolsIsAuthenticated', false)
+          localStorage.removeItem('token')
+        }
+        // 其他错误（网络错误、超时等）不清除登录状态
         throw error
       }
     },
@@ -468,17 +567,25 @@ export default createStore({
     async updateUserProfile({ commit, state }, profileData) {
       try {
         const params = new FormData()
-        // 只添加非空的字段
-        if (profileData.nickname) params.append('nickname', profileData.nickname)
-        if (profileData.avatar) params.append('avatar', profileData.avatar)
-        if (profileData.description) params.append('description', profileData.description)
-        if (profileData.face_photo) params.append('face_photo', profileData.face_photo)
+        // 添加字段（avatar可以为空字符串，表示使用默认头像）
+        if (profileData.nickname !== undefined) params.append('nickname', profileData.nickname)
+        if (profileData.avatar !== undefined) params.append('avatar', profileData.avatar || '')
+        if (profileData.description !== undefined) params.append('description', profileData.description || '')
+        if (profileData.face_photo !== undefined) params.append('face_photo', profileData.face_photo || '')
 
         const response = await HttpManager.updateUserProfile(params, state.token)
 
-        if ((response.islogin || response.code === 200) && response.data) {
-          commit('setUserInfo', response.data.user || response.data)
-          return { success: true, data: response.data.user || response.data }
+        // 后端返回格式：{ message: "Profile updated successfully", user: {...} }
+        // 或者：{ message: "Profile updated successfully", ...user fields }
+        if (response.user || (response.message && response.message.includes('successfully'))) {
+          // 如果响应中有 user 字段，使用它；否则使用整个响应对象（因为后端可能直接返回用户字段）
+          const userData = response.user || response
+          commit('setUserInfo', userData)
+          return { success: true, data: userData, message: response.message }
+        } else if (response.code === 200 || response.islogin) {
+          // 兼容其他可能的响应格式
+          commit('setUserInfo', response.data?.user || response.data || response)
+          return { success: true, data: response.data?.user || response.data || response }
         } else {
           return {
             success: false,
@@ -534,12 +641,173 @@ export default createStore({
       commit('setTimeInfo', { today, weekday, currentTime })
     },
 
+    // 获取首页精选工具（从工具资源中获取浏览量最高的10个）
+    async fetchHomeTools({ commit }) {
+      try {
+        const response = await HttpManager.getTools({
+          page: 1,
+          page_size: 100 // 获取足够多的数据以便排序
+        })
+
+        const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+        const toolsData = response?.data || response?.data?.list || []
+
+        if (isSuccess && Array.isArray(toolsData)) {
+          // 按浏览量排序，取前10个
+          const sortedTools = toolsData
+            .sort((a, b) => (b.views || 0) - (a.views || 0))
+            .slice(0, 10)
+            .map(tool => {
+              // 优先使用 image 数组的第一个元素，其次使用 logo 字段
+              let icon = ''
+              if (tool.image && Array.isArray(tool.image) && tool.image.length > 0 && tool.image[0]) {
+                icon = tool.image[0]
+              } else if (tool.logo) {
+                icon = tool.logo
+              } else if (tool.icon) {
+                icon = tool.icon
+              }
+              
+              return {
+                name: tool.resourceName || tool.name || '未命名工具',
+                url: `/tools/detail/${tool.resourceId || tool.id}`, // 使用内部路由指向工具详情页
+                icon: icon, // 如果为空，将在模板中使用默认图片
+                desc: tool.description || tool.desc || '暂无描述'
+              }
+            })
+
+          commit('setHomeTools', sortedTools)
+          return sortedTools
+        }
+      } catch (error) {
+        console.error('获取首页精选工具失败:', error)
+        // 保持默认数据，不更新
+      }
+    },
+
+    // 获取首页课程浏览（从课程路线中获取浏览量最高的10个）
+    async fetchHomeCourses({ commit }) {
+      try {
+        const response = await HttpManager.getCourses({
+          limit: 1000, // 获取足够多的数据以便排序
+          cursor: 0
+        })
+
+        // 课程API返回格式：{ courses_agg: [...] } 或其他格式
+        let coursesData = []
+        if (response && response.courses_agg) {
+          coursesData = response.courses_agg
+        } else if (response && response.data) {
+          coursesData = Array.isArray(response.data) ? response.data : (response.data.list || [])
+        } else if (Array.isArray(response)) {
+          coursesData = response
+        }
+
+        console.log('首页课程数据:', { response, coursesData, count: coursesData.length })
+
+        if (Array.isArray(coursesData) && coursesData.length > 0) {
+          // 按浏览量（views）或点赞数（likes）排序，取前10个
+          const sortedCourses = coursesData
+            .sort((a, b) => {
+              // 优先使用views，如果没有则使用likes
+              const aScore = (a.views || 0) + (a.likes || 0) * 0.5
+              const bScore = (b.views || 0) + (b.likes || 0) * 0.5
+              return bScore - aScore
+            })
+            .slice(0, 10)
+            .map(course => {
+              // 优先使用 image 数组的第一个元素，其次使用 logo 字段
+              let icon = ''
+              if (course.image && Array.isArray(course.image) && course.image.length > 0 && course.image[0]) {
+                icon = course.image[0]
+              } else if (course.logo) {
+                icon = course.logo
+              } else if (course.icon) {
+                icon = course.icon
+              }
+              
+              return {
+                name: course.name || course.title || '未命名课程',
+                url: `/course/detail/${course.id || course.courseId}`, // 使用内部路由
+                icon: icon, // 如果为空，将在模板中使用默认图片
+                desc: course.teacher || '暂无教师信息'
+              }
+            })
+
+          commit('setHomeCourses', sortedCourses)
+          return sortedCourses
+        }
+      } catch (error) {
+        console.error('获取首页课程浏览失败:', error)
+        // 保持默认数据，不更新
+      }
+    },
+
+    // 获取首页项目情况（从项目展示中获取浏览量最高的10个）
+    async fetchHomeProjects({ commit }) {
+      try {
+        const response = await HttpManager.getProjects({
+          page: 1,
+          limit: 100 // 获取足够多的数据以便排序
+        })
+
+        const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+        const projectsData = response?.data || response?.data?.list || []
+
+        if (isSuccess && Array.isArray(projectsData)) {
+          // 按浏览量排序，取前10个
+          const sortedProjects = projectsData
+            .sort((a, b) => (b.views || 0) - (a.views || 0))
+            .slice(0, 10)
+            .map(project => {
+              // 优先使用 coverImage，其次使用 image 数组的第一个元素，最后使用 logo 字段
+              let icon = ''
+              if (project.coverImage) {
+                icon = project.coverImage
+              } else if (project.image && Array.isArray(project.image) && project.image.length > 0 && project.image[0]) {
+                icon = project.image[0]
+              } else if (project.logo) {
+                icon = project.logo
+              } else if (project.icon) {
+                icon = project.icon
+              }
+              
+              return {
+                name: project.name || project.title || '未命名项目',
+                url: `/projects/detail/${project.id || project.projectId}`,
+                icon: icon, // 如果为空，将在模板中使用默认图片
+                desc: project.description || project.desc || '暂无描述'
+              }
+            })
+
+          commit('setHomeProjects', sortedProjects)
+          return sortedProjects
+        }
+      } catch (error) {
+        console.error('获取首页项目情况失败:', error)
+        // 保持默认数据，不更新
+      }
+    },
+
     // 执行搜索
-    doSearch({ commit, state }) {  // 添加 commit 参数
+    doSearch({ commit, state }, { router }) {  // 添加 router 参数
       const q = state.home.searchInput.trim()
       if (q) {
-        window.open(state.home.searchEngine + encodeURIComponent(q), '_blank')
-        commit('setSearchInput', '')  // 现在可以正确使用 commit
+        // 如果是站内搜索
+        if (state.home.searchEngine === 'local') {
+          // 跳转到搜索页面，并传递搜索关键词
+          if (router) {
+            router.push({
+              path: '/search',
+              query: { q: q }
+            })
+          }
+          commit('setSearchInput', '')  // 清空搜索输入框
+        } else {
+          // 外部搜索引擎，在新窗口打开
+          window.open(state.home.searchEngine + encodeURIComponent(q), '_blank')
+          commit('setSearchInput', '')  // 清空搜索输入框
+        }
       }
     },
 
@@ -613,14 +881,50 @@ export default createStore({
             ...params
           })
 
-          if (response.code === 200) {
-            const projectsList = response.data?.list || response.data || []
-            commit('setProjectsList', projectsList)
+          // 后端返回格式：{ message: "success", data: [...] } 或 { code: 200, data: [...] }
+          // 兼容两种格式
+          const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+          const projectsData = response?.data || response?.data?.list || []
+          
+          // 调试：打印原始响应和解析后的数据
+          console.log('项目列表后端原始响应:', response)
+          console.log('项目列表解析后的数据（前3个）:', projectsData.slice(0, 3).map(p => ({
+            name: p.name,
+            collections: p.collections,
+            stars: p.stars,
+            loves: p.loves
+          })))
+          
+          if (isSuccess && Array.isArray(projectsData)) {
+            // 统一使用 collections 字段，移除 loves 和 stars 字段
+            const mappedProjects = projectsData.map(project => {
+              // 确保 collections 字段存在，如果不存在则设为 0
+              const collectionsValue = (project.collections !== undefined && project.collections !== null) 
+                ? project.collections 
+                : 0
+              
+              // 移除 loves 和 stars 字段，只保留 collections
+              // eslint-disable-next-line no-unused-vars
+              const { loves, stars, ...rest } = project
+              
+              return {
+                ...rest,
+                collections: collectionsValue
+              }
+            })
+            
+            console.log('映射后的项目列表数据（前3个）:', mappedProjects.slice(0, 3).map(p => ({
+              name: p.name,
+              collections: p.collections
+            })))
+            
+            // 即使数据为空，也正常处理（显示空列表）
+            commit('setProjectsList', mappedProjects)
             commit('setProjectsPagination', {
-              total: response.data?.total || projectsList.length,
+              total: response.data?.total || mappedProjects.length,
               hasMore: response.data?.hasMore || false
             })
-            commit('setProjectsCategories', [...new Set(projectsList.map(p => p.category))])
+            commit('setProjectsCategories', [...new Set(mappedProjects.map(p => p.category))])
           }
         }
       } catch (error) {
@@ -629,6 +933,38 @@ export default createStore({
         commit('setProjectsCategories', [...new Set(mockProjects.map(p => p.category))])
       } finally {
         commit('setProjectsLoading', false)
+      }
+    },
+
+    // 搜索课程
+    // eslint-disable-next-line no-unused-vars
+    async searchCourses({ commit }, { query, params = {} }) {
+      if (!query?.trim()) {
+        return []
+      }
+
+      try {
+        const response = await HttpManager.searchCourses({
+          keyword: query.trim(),
+          ...params
+        })
+
+        // 课程搜索API返回格式：{ message: "success", courses_agg: [...] }
+        let results = []
+        if (response && (response.code === 200 || response.message === 'success')) {
+          if (response.courses_agg) {
+            results = response.courses_agg
+          } else if (response.data) {
+            results = Array.isArray(response.data) ? response.data : []
+          }
+        } else if (Array.isArray(response)) {
+          results = response
+        }
+
+        return results || []
+      } catch (error) {
+        console.error('搜索课程失败:', error)
+        return []
       }
     },
 
@@ -641,14 +977,30 @@ export default createStore({
 
       try {
         const response = await HttpManager.searchProjects({
-          q: query.trim(),
+          keyword: query.trim(),
           ...params
         })
 
-        if (response.code === 200) {
+        // 项目搜索API返回格式：{ message: "success", data: [...] }
+        if (response && (response.code === 200 || response.message === 'success')) {
           const results = response.data || []
-          commit('setProjectsSearchResults', results)
-          return results
+          // 统一使用 collections 字段，移除 loves 和 stars 字段
+          const mappedResults = results.map(project => {
+            const collectionsValue = (project.collections !== undefined && project.collections !== null) 
+              ? project.collections 
+              : 0
+            
+            // 移除 loves 和 stars 字段，只保留 collections
+            // eslint-disable-next-line no-unused-vars
+            const { loves, stars, ...rest } = project
+            
+            return {
+              ...rest,
+              collections: collectionsValue
+            }
+          })
+          commit('setProjectsSearchResults', mappedResults)
+          return mappedResults
         }
         return []
       } catch (error) {
@@ -668,17 +1020,31 @@ export default createStore({
     async getProjectDetail({ commit, state, dispatch }, projectId) {
       try {
         const response = await HttpManager.getProjectDetail(projectId)
+        
+        // 调试：打印后端原始响应
+        console.log('后端原始响应:', response)
 
-        if (response.code === 200 && response.data) {
-          commit('setCurrentProjectDetail', response.data)
+        // 后端返回格式：{ message: "success", data: {...} } 或直接返回 data
+        // 兼容两种格式
+        const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+        const projectData = response?.data || response
+        
+        // 调试：打印解析后的项目数据
+        console.log('解析后的项目数据:', projectData)
+        console.log('项目数据中的 collections:', projectData?.collections)
+
+        if (isSuccess && projectData) {
+          commit('setCurrentProjectDetail', projectData)
           await dispatch('addProjectView', projectId)
-          return response.data
+          return projectData
         }
 
-        return state.projects.projectsList.find(p => p.id === parseInt(projectId)) || null
+        // 如果后端没有返回数据，尝试从本地列表中查找（模拟数据回退）
+        return state.projects.projectsList.find(p => (p.id === parseInt(projectId) || p.projectId === parseInt(projectId))) || null
       } catch (error) {
         console.error('获取项目详情失败:', error)
-        return state.projects.projectsList.find(p => p.id === parseInt(projectId)) || null
+        // 如果后端出错，尝试从本地列表中查找（模拟数据回退）
+        return state.projects.projectsList.find(p => (p.id === parseInt(projectId) || p.projectId === parseInt(projectId))) || null
       }
     },
 
@@ -705,15 +1071,31 @@ export default createStore({
           throw new Error('请先登录')
         }
 
-        const userCollection = await HttpManager.getUserCollection(state.token)
-        const isCollected = userCollection.data?.some(item =>
-          item.resourceId === projectId && item.resourceType === 'project'
+        const userCollection = await HttpManager.getUserCollection()
+        // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
+        let allCollections = []
+        if (userCollection.data) {
+          allCollections = [
+            ...(userCollection.data.tools || []),
+            ...(userCollection.data.resources || []),
+            ...(userCollection.data.teaches || [])
+          ]
+        } else if (userCollection.tools || userCollection.resources || userCollection.teaches) {
+          allCollections = [
+            ...(userCollection.tools || []),
+            ...(userCollection.resources || []),
+            ...(userCollection.teaches || [])
+          ]
+        }
+        const isCollected = allCollections.some(item =>
+          (item.resourceId || item.resource_id || item.projectId || item.project_id) === projectId && 
+          (item.resourceType || item.resource_type) === 'project'
         )
 
         if (isCollected) {
-          await HttpManager.removeProjectCollection(projectId, state.token)
+          await HttpManager.removeProjectCollection(projectId)
         } else {
-          await HttpManager.toggleProjectCollection(projectId, state.token)
+          await HttpManager.toggleProjectCollection(projectId)
         }
         return !isCollected
       } catch (error) {
@@ -761,18 +1143,24 @@ export default createStore({
         } else {
           const response = await HttpManager.getTools({
             page: state.tools.pagination.page,
-            limit: state.tools.pagination.limit,
+            page_size: 100, // 设置足够大的值以获取所有工具
             ...params
           })
 
-          if (response.code === 200) {
-            const toolsList = response.data?.list || response.data || []
-            commit('setToolsList', toolsList)
+          // 后端返回格式：{ message: "success", data: [...] } 或 { code: 200, data: [...] }
+          // 兼容两种格式
+          const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+          const toolsData = response?.data || response?.data?.list || []
+          
+          if (isSuccess && Array.isArray(toolsData)) {
+            // 即使数据为空，也正常处理（显示空列表）
+            commit('setToolsList', toolsData)
             commit('setToolsPagination', {
-              total: response.data?.total || toolsList.length,
+              total: response.data?.total || toolsData.length,
               hasMore: response.data?.hasMore || false
             })
-            commit('setToolsCategories', [...new Set(toolsList.map(t => t.category))])
+            // 兼容 category 和 catagory 两种拼写
+            commit('setToolsCategories', [...new Set(toolsData.map(t => t.category || t.catagory).filter(Boolean))])
 
             // 初始化标签分组数据
             const filterTags = (ids) => predefinedTags?.filter(tag => ids.includes(tag.id)) || []
@@ -786,14 +1174,20 @@ export default createStore({
               其他: filterTags(['general', 'new', 'popular', 'official', 'community'])
             }
             commit('setToolsTagsByCategory', tagsByCategory)
+          } else {
+            // 后端返回格式不正确或出错
+            throw new Error(`后端返回错误: ${response?.message || response?.code || 'unknown'}`)
           }
         }
       } catch (error) {
         console.error('获取工具列表失败:', error)
-        commit('setToolsList', mockTools)
-        commit('setToolsCategories', [...new Set(mockTools.map(t => t.category))])
+        // 不再使用 mockTools 作为后备，因为 mockTools 中的 ID 与数据库中的实际 ID 不匹配
+        // 会导致用户点击工具卡片时出现 404 错误
+        // 如果后端获取失败，显示空列表，让用户知道数据加载失败
+        commit('setToolsList', [])
+        commit('setToolsCategories', [])
 
-        // 初始化标签分组数据
+        // 初始化标签分组数据（即使没有工具数据，也初始化标签，以备后续使用）
         const filterTags = (ids) => predefinedTags?.filter(tag => ids.includes(tag.id)) || []
         const tagsByCategory = {
           平台: filterTags(['web', 'desktop', 'mobile', 'cross-platform']),
@@ -819,11 +1213,12 @@ export default createStore({
 
       try {
         const response = await HttpManager.searchTools({
-          q: query.trim(),
+          keyword: query.trim(),
           ...params
         })
 
-        if (response.code === 200) {
+        // 工具搜索API返回格式：{ message: "success", data: [...] }
+        if (response && (response.code === 200 || response.message === 'success')) {
           const results = response.data || []
           commit('setToolsSearchResults', results)
           return results
@@ -843,20 +1238,50 @@ export default createStore({
     },
 
     // 获取工具详情
-    async getToolDetail({ commit, state, dispatch }, toolId) {
+    async getToolDetail({ commit, state }, toolId) {
       try {
         const response = await HttpManager.getToolDetail(toolId, 'tool')
 
-        if (response.code === 200 && response.data) {
-          commit('setCurrentToolDetail', response.data)
-          await dispatch('addToolView', toolId)
-          return response.data
+        // 后端返回格式：{ message: "success", data: {...} } 或 { code: 200, data: {...} }
+        // 兼容两种格式
+        const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+        const toolData = response?.data
+
+        if (isSuccess && toolData) {
+          commit('setCurrentToolDetail', toolData)
+          // 先获取当前的浏览量，然后增加浏览量，最后更新本地数据
+          const currentViews = toolData.views || 0
+          try {
+            const viewResponse = await HttpManager.addToolView(toolId)
+            // 如果 addToolView 返回了更新后的浏览量，使用它；否则使用当前浏览量 + 1
+            const updatedViews = viewResponse?.data?.views ?? (currentViews + 1)
+            // 更新本地工具详情中的浏览量
+            toolData.views = updatedViews
+            commit('setCurrentToolDetail', toolData)
+            // 同时更新列表中的浏览量
+            const toolIndex = state.tools.toolsList.findIndex(t => (t.resourceId || t.id) === parseInt(toolId))
+            if (toolIndex !== -1) {
+              const updatedList = [...state.tools.toolsList]
+              updatedList[toolIndex] = { ...updatedList[toolIndex], views: updatedViews }
+              commit('setToolsList', updatedList)
+            }
+          } catch (error) {
+            console.error('增加浏览量失败:', error)
+            // 即使增加浏览量失败，也继续返回工具详情
+          }
+          return toolData
         }
 
-        return state.tools.toolsList.find(t => t.id === parseInt(toolId)) || null
+        // 如果响应格式不正确，尝试从本地列表查找（可能是缓存的数据）
+        return state.tools.toolsList.find(t => (t.resourceId || t.id) === parseInt(toolId)) || null
       } catch (error) {
         console.error('获取工具详情失败:', error)
-        return mockTools.find(t => t.id === parseInt(toolId)) || null
+        // 404错误：工具不存在
+        if (error.response?.status === 404) {
+          throw new Error('该工具不存在或已被删除')
+        }
+        // 其他错误：尝试从本地列表查找（可能是缓存的数据）
+        return state.tools.toolsList.find(t => (t.resourceId || t.id) === parseInt(toolId)) || null
       }
     },
 
@@ -882,15 +1307,31 @@ export default createStore({
           throw new Error('请先登录')
         }
 
-        const userCollection = await HttpManager.getUserCollection(state.token)
-        const isCollected = userCollection.data?.some(item =>
-          item.resourceId === toolId && item.resourceType === resourceType
+        const userCollection = await HttpManager.getUserCollection()
+        // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
+        let allCollections = []
+        if (userCollection.data) {
+          allCollections = [
+            ...(userCollection.data.tools || []),
+            ...(userCollection.data.resources || []),
+            ...(userCollection.data.teaches || [])
+          ]
+        } else if (userCollection.tools || userCollection.resources || userCollection.teaches) {
+          allCollections = [
+            ...(userCollection.tools || []),
+            ...(userCollection.resources || []),
+            ...(userCollection.teaches || [])
+          ]
+        }
+        const isCollected = allCollections.some(item =>
+          (item.resourceId || item.resource_id) === toolId && 
+          (item.resourceType || item.resource_type) === resourceType
         )
 
         if (isCollected) {
-          await HttpManager.removeToolCollection(toolId, resourceType, state.token)
+          await HttpManager.removeToolCollection(toolId, resourceType)
         } else {
-          await HttpManager.toggleToolCollection(toolId, resourceType, state.token)
+          await HttpManager.toggleToolCollection(toolId, resourceType)
         }
         return !isCollected
       } catch (error) {
@@ -959,21 +1400,52 @@ export default createStore({
       if (token) {
         // 有 token，尝试获取用户信息来验证 token 有效性
         try {
-          const response = await HttpManager.getUserProfile(token)
-          if (response.code === 200 && response.data) {
-            commit('setUserInfo', response.data)
+          const response = await HttpManager.getUserProfile()
+          // 后端返回格式：response.Success(c, profile) 直接返回User对象
+          // axios会自动解析JSON，所以response.data就是User对象
+          // 但由于我们的get函数已经返回了response.data，所以response本身就是User对象
+          let userData = response
+          
+          // 如果response有data字段，说明被包装了（可能是错误情况），使用data
+          if (response && response.data && typeof response.data === 'object' && (response.data.id || response.data.username)) {
+            userData = response.data
+          }
+          
+          // 检查是否是有效的User对象
+          const isSuccess = userData && (userData.id || userData.username)
+          
+          if (isSuccess && userData) {
+            // 映射后端字段名（兼容拼写错误 avater）
+            const mappedUserData = {
+              ...userData,
+              avatar: userData.avatar || userData.avater || '', // 兼容拼写错误
+              nickname: userData.nickname || userData.username || '', // 如果昵称为空，使用用户名
+              username: userData.username || ''
+            }
+            commit('setUserInfo', mappedUserData)
             commit('setLoginIn', true)
             commit('setToken', token)
             commit('setToolsIsAuthenticated', true)
-            localStorage.setItem('user', JSON.stringify(response.data))
-            return response.data
+            localStorage.setItem('user', JSON.stringify(mappedUserData))
+            return mappedUserData
           } else {
             throw new Error('未登录')
           }
         } catch (error) {
           console.log('当前为游客模式或获取资料失败')
-          commit('setToolsIsAuthenticated', false)
-          commit('setUserInfo', {})
+          // 清除所有登录状态（包括token）
+          // 只有明确的401错误才清除token，其他错误可能是网络问题，保留token
+          if (error.response?.status === 401) {
+            commit('setToken', '')
+            commit('setLoginIn', false)
+            commit('setToolsIsAuthenticated', false)
+            commit('setUserInfo', {})
+            localStorage.removeItem('token')
+          } else {
+            // 其他错误（网络错误、超时等），不清除登录状态，只更新UI状态
+            commit('setToolsIsAuthenticated', false)
+            commit('setUserInfo', {})
+          }
           return null
         }
       } else {
@@ -1049,7 +1521,7 @@ export default createStore({
     // 当前搜索引擎名称
     currentEngineName: (state) => {
       const engine = state.home.engines.find(e => e.value === state.home.searchEngine)
-      return engine ? engine.name : '百度'
+      return engine ? engine.name : '本站'
     },
 
     // ============ 项目相关 ============

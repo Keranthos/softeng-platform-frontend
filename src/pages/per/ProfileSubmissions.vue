@@ -60,7 +60,12 @@
         <tr v-for="item in filteredSubmissions" :key="item.id">
           <td class="item-title">
             <div class="title-content">
-              <i :class="getTypeIcon(item.type)" class="type-icon"></i>
+              <img 
+                :src="getItemIcon(item)" 
+                :alt="item.title"
+                class="item-icon-img"
+                @error="handleImageError($event, item)"
+              />
               <span>{{ item.title }}</span>
             </div>
           </td>
@@ -149,11 +154,13 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useStore } from 'vuex'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { HttpManager } from '@/api'
+import { getImageUrl } from '@/utils/image'
 
-const store = useStore()
+const router = useRouter()
+
 const loading = ref(false)
 const activeStatus = ref('all')
 const currentPage = ref(1)
@@ -201,16 +208,6 @@ const endIndex = computed(() =>
   )
 )
 
-const getTypeIcon = (type) => {
-  const icons = {
-    tool: 'fa-wrench',
-    course: 'fa-book',
-    project: 'fa-project-diagram',
-    resource: 'fa-file-alt'
-  }
-  return icons[type] || 'fa-file'
-}
-
 const getTypeLabel = (type) => {
   const labels = {
     tool: '工具',
@@ -242,31 +239,127 @@ const formatDate = (dateString) => {
   })
 }
 
+// 生成默认图标（基于名称的第一个字符）
+const generateDefaultIcon = (name, type = 'tool') => {
+  const displayName = name || (type === 'tool' ? '工' : type === 'course' ? '课' : type === 'project' ? '项' : '资')
+  const initial = displayName.charAt(0)
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2']
+  const colorIndex = initial.charCodeAt(0) % colors.length
+  const bgColor = colors[colorIndex]
+  
+  const svg = `
+    <svg width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" fill="${bgColor}" rx="8"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="16" fill="white" text-anchor="middle" dominant-baseline="central" font-weight="bold">${initial}</text>
+    </svg>
+  `.trim()
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
+}
+
+// 获取项目图标（如果有图片则使用图片，否则生成默认图标）
+const getItemIcon = (item) => {
+  // 优先使用用户上传的图标（检查多个可能的字段）
+  // 注意：后端返回的 image 和 images 可能是数组，需要正确处理
+  let imageUrl = ''
+  
+  // 先检查数组格式的图片字段
+  if (Array.isArray(item.image) && item.image.length > 0) {
+    imageUrl = item.image[0]
+  } else if (Array.isArray(item.images) && item.images.length > 0) {
+    imageUrl = item.images[0]
+  } else if (typeof item.image === 'string' && item.image.trim() !== '') {
+    // 如果是字符串格式
+    imageUrl = item.image
+  } else if (typeof item.images === 'string' && item.images.trim() !== '') {
+    imageUrl = item.images
+  } else {
+    // 检查其他可能的字段
+    imageUrl = item.logo || item.icon || item.cover || ''
+  }
+  
+  // 只有当图片URL存在且不为空字符串时才使用
+  if (imageUrl && imageUrl.trim() !== '') {
+    return getImageUrl(imageUrl)
+  }
+  
+  // 没有图标时，生成默认图标
+  return generateDefaultIcon(item.title || item.name || item.resourceName || '', item.type || 'tool')
+}
+
+// 处理图片加载错误
+const handleImageError = (event, item) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标（SVG），不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml')) {
+    return
+  }
+  
+  // 使用名称生成默认图标
+  const defaultIcon = generateDefaultIcon(item.title || item.name || item.resourceName || '', item.type || 'tool')
+  
+  if (event.target.src !== defaultIcon) {
+    event.target.src = defaultIcon
+  }
+}
+
 // 方法
 const fetchSubmissions = async () => {
   loading.value = true
   try {
-    const token = store.state.token || localStorage.getItem('token')
-    const response = await HttpManager.getUserSubmissions(token)
+    // token 已在请求拦截器中自动添加，不需要手动传递
+    const response = await HttpManager.getUserSubmissions()
 
+    // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
+    // 或者: { islogin: true, data: { tools: [...], resources: [...], teaches: [...] } }
+    let allSubmissions = []
+    
+    // 处理不同格式的响应数据
     if (response.islogin && response.data) {
-      const allSubmissions = [
+      // 格式1: { islogin: true, data: { tools: [], resources: [], teaches: [] } }
+      allSubmissions = [
         ...response.data.tools?.map(tool => ({
           ...tool,
           type: 'tool',
-          title: tool.introduce || '工具提交'
+          title: tool.introduce || tool.resourceName || '工具提交',
+          image: tool.image?.[0] || tool.images?.[0] || tool.logo || tool.icon || null
         })) || [],
         ...response.data.resources?.map(resource => ({
           ...resource,
           type: 'resource',
-          title: resource.introduce || '资源提交'
+          title: resource.introduce || resource.resourceName || '资源提交',
+          image: resource.image?.[0] || resource.images?.[0] || resource.logo || resource.icon || resource.cover || null
         })) || [],
         ...response.data.teaches?.map(teach => ({
           ...teach,
           type: 'course',
-          title: teach.introduce || '课程提交'
+          title: teach.introduce || teach.resourceName || '课程提交',
+          image: teach.image?.[0] || teach.images?.[0] || teach.logo || teach.icon || teach.cover || null
         })) || []
       ]
+    } else if (response.message === 'success' || response.tools || response.resources || response.teaches) {
+      // 格式2: { message: "success", tools: [], resources: [], teaches: [] }
+      allSubmissions = [
+        ...response.tools?.map(tool => ({
+          ...tool,
+          type: 'tool',
+          title: tool.introduce || tool.resourceName || '工具提交',
+          image: tool.image?.[0] || tool.images?.[0] || tool.logo || tool.icon || null
+        })) || [],
+        ...response.resources?.map(resource => ({
+          ...resource,
+          type: 'resource',
+          title: resource.introduce || resource.resourceName || '资源提交',
+          image: resource.image?.[0] || resource.images?.[0] || resource.logo || resource.icon || resource.cover || null
+        })) || [],
+        ...response.teaches?.map(teach => ({
+          ...teach,
+          type: 'course',
+          title: teach.introduce || teach.resourceName || '课程提交',
+          image: teach.image?.[0] || teach.images?.[0] || teach.logo || teach.icon || teach.cover || null
+        })) || []
+      ]
+    }
 
       submissions.value = allSubmissions
       total.value = allSubmissions.length
@@ -279,10 +372,14 @@ const fetchSubmissions = async () => {
           status.count = allSubmissions.filter(item => item.auditStatus === status.id).length
         }
       })
-    }
   } catch (error) {
     console.error('获取提交记录失败:', error)
-    ElMessage.error('获取提交记录失败')
+    // 401错误已经在响应拦截器中处理（清除token并跳转登录页），这里只处理其他错误
+    if (error.response?.status !== 401) {
+      ElMessage.error('获取提交记录失败，请稍后重试')
+    }
+    submissions.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -306,8 +403,16 @@ const viewItem = (item) => {
   }
 }
 
-const editItem = () => {
-  ElMessage.info('编辑功能开发中...')
+const editItem = (item) => {
+  // 跳转到投稿页面，传递工具ID作为查询参数
+  router.push({
+    path: '/tools/submit',
+    query: {
+      edit: 'true',
+      id: item.resourceId,
+      type: item.type
+    }
+  })
 }
 
 const showWithdrawDialog = (item) => {
@@ -321,12 +426,11 @@ const showWithdrawDialog = (item) => {
     }
   ).then(async () => {
     try {
-      const token = store.state.token || localStorage.getItem('token')
+      // token 已在请求拦截器中自动添加，不需要手动传递
       await HttpManager.updateSubmissionStatus(
         item.resourceType,
         item.resourceId,
-        { action: '撤回' },
-        token
+        { action: '撤回' }
       )
 
       ElMessage.success('提交已撤回')
@@ -564,6 +668,14 @@ onMounted(() => {
     align-items: center;
     justify-content: center;
     color: #4a5568;
+    flex-shrink: 0;
+  }
+
+  .item-icon-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    object-fit: cover;
     flex-shrink: 0;
   }
 

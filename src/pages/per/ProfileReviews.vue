@@ -56,7 +56,14 @@
           >
             <div class="review-header">
               <div class="review-type">
-                <i :class="getTypeIcon(item.type)" class="type-icon"></i>
+                <img 
+                  v-if="item.image" 
+                  :src="getImageUrl(item.image)" 
+                  :alt="item.title"
+                  class="item-icon-img"
+                  @error="handleImageError($event)"
+                />
+                <i v-else :class="getTypeIcon(item.type)" class="type-icon"></i>
                 <span class="type-label">{{ getTypeLabel(item.type) }}</span>
               </div>
 
@@ -106,22 +113,6 @@
                 重新提交
               </button>
 
-              <button
-                v-if="item.auditStatus === 'pending'"
-                @click="showCancelDialog(item)"
-                class="action-btn cancel-btn"
-              >
-                <i class="fas fa-times"></i>
-                取消提交
-              </button>
-
-              <button
-                @click="showDeleteDialog(item)"
-                class="action-btn delete-btn"
-              >
-                <i class="fas fa-trash"></i>
-                删除
-              </button>
             </div>
           </div>
         </div>
@@ -132,11 +123,10 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { HttpManager } from '@/api'
+import { getImageUrl } from '@/utils/image'
 
-const store = useStore()
 const loading = ref(false)
 const activeTab = ref('all')
 
@@ -207,6 +197,14 @@ const getStatusLabel = (status) => {
   return labels[status] || status
 }
 
+// 处理图片加载错误
+const handleImageError = (event) => {
+  // 如果图片加载失败，隐藏图片，显示默认图标
+  if (event.target) {
+    event.target.style.display = 'none'
+  }
+}
+
 const formatDate = (dateString) => {
   if (!dateString) return '-'
   const date = new Date(dateString)
@@ -222,33 +220,67 @@ const formatDate = (dateString) => {
 const fetchReviews = async () => {
   loading.value = true
   try {
-    const token = store.state.token || localStorage.getItem('token')
-    const response = await HttpManager.getReviewStatus(token)
+    // token 已在请求拦截器中自动添加，不需要手动传递
+    const response = await HttpManager.getReviewStatus()
 
+    // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
+    // 或者: { islogin: true, data: { tools: [...], resources: [...], teaches: [...] } }
+    let allReviews = []
+    
+    // 处理不同格式的响应数据
     if (response.islogin && response.data) {
-      const allReviews = [
+      // 格式1: { islogin: true, data: { tools: [], resources: [], teaches: [] } }
+      allReviews = [
         ...response.data.tools?.map(tool => ({
           ...tool,
           type: 'tool',
-          title: tool.introduce || '工具提交',
+          title: tool.introduce || tool.resourceName || '工具提交',
           description: '工具类内容提交审核',
-          viewLink: `/tools/detail/${tool.resourceId}`
+          viewLink: `/tools/detail/${tool.resourceId}`,
+          image: tool.image?.[0] || tool.images?.[0] || tool.logo || tool.icon || ''
         })) || [],
         ...response.data.resources?.map(resource => ({
           ...resource,
           type: 'resource',
-          title: resource.introduce || '资源提交',
+          title: resource.introduce || resource.resourceName || '资源提交',
           description: '资源类内容提交审核',
           viewLink: `/projects/${resource.resourceId}`
         })) || [],
         ...response.data.teaches?.map(teach => ({
           ...teach,
           type: 'course',
-          title: teach.introduce || '课程提交',
+          title: teach.introduce || teach.resourceName || '课程提交',
           description: '课程类内容提交审核',
           viewLink: `/courses/detail/${teach.resourceId}`
         })) || []
       ]
+    } else if (response.message === 'success' || response.tools || response.resources || response.teaches) {
+      // 格式2: { message: "success", tools: [], resources: [], teaches: [] }
+      allReviews = [
+        ...response.tools?.map(tool => ({
+          ...tool,
+          type: 'tool',
+          title: tool.introduce || tool.resourceName || '工具提交',
+          description: '工具类内容提交审核',
+          viewLink: `/tools/detail/${tool.resourceId}`,
+          image: tool.image?.[0] || tool.images?.[0] || tool.logo || tool.icon || ''
+        })) || [],
+        ...response.resources?.map(resource => ({
+          ...resource,
+          type: 'resource',
+          title: resource.introduce || resource.resourceName || '资源提交',
+          description: '资源类内容提交审核',
+          viewLink: `/projects/${resource.resourceId}`
+        })) || [],
+        ...response.teaches?.map(teach => ({
+          ...teach,
+          type: 'course',
+          title: teach.introduce || teach.resourceName || '课程提交',
+          description: '课程类内容提交审核',
+          viewLink: `/courses/detail/${teach.resourceId}`
+        })) || []
+      ]
+    }
 
       reviews.value = allReviews
 
@@ -260,10 +292,13 @@ const fetchReviews = async () => {
           tab.count = allReviews.filter(item => item.auditStatus === tab.id).length
         }
       })
-    }
   } catch (error) {
     console.error('获取审核状态失败:', error)
-    ElMessage.error('获取审核状态失败')
+    // 401错误已经在响应拦截器中处理（清除token并跳转登录页），这里只处理其他错误
+    if (error.response?.status !== 401) {
+      ElMessage.error('获取审核状态失败，请稍后重试')
+    }
+    reviews.value = []
   } finally {
     loading.value = false
   }
@@ -294,55 +329,6 @@ const showEditDialog = (item) => {
   })
 }
 
-const showCancelDialog = (item) => {
-  ElMessageBox.confirm(
-    `确定要取消"${item.title}"的提交吗？`,
-    '取消提交',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(async () => {
-    try {
-      const token = store.state.token || localStorage.getItem('token')
-      await HttpManager.updateSubmissionStatus(
-        item.resourceType,
-        item.resourceId,
-        { action: '取消', state: '用户主动取消' },
-        token
-      )
-
-      ElMessage.success('提交已取消')
-      await fetchReviews()
-    } catch (error) {
-      console.error('取消提交失败:', error)
-      ElMessage.error('取消提交失败')
-    }
-  })
-}
-
-const showDeleteDialog = (item) => {
-  ElMessageBox.confirm(
-    `确定要删除"${item.title}"的审核记录吗？`,
-    '删除记录',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'error'
-    }
-  ).then(async () => {
-    try {
-      // 这里应该调用删除API
-      // 暂时模拟删除
-      reviews.value = reviews.value.filter(review => review.id !== item.id)
-      ElMessage.success('记录已删除')
-    } catch (error) {
-      console.error('删除失败:', error)
-      ElMessage.error('删除失败')
-    }
-  })
-}
 
 onMounted(() => {
   fetchReviews()
@@ -523,6 +509,14 @@ onMounted(() => {
     justify-content: center;
     color: #4a5568;
     font-size: 12px;
+  }
+
+  .item-icon-img {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
   }
 
   .type-label {

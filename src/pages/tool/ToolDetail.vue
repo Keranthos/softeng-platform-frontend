@@ -6,7 +6,11 @@
 
       <div class="flex flex-col items-center gap-4 min-w-[120px]">
         <div class="w-28 h-28 rounded-3xl bg-gray-50 p-2 shadow-inner border border-gray-200">
-          <img :src="tool.logo" class="w-full h-full object-contain rounded-2xl" alt="icon">
+          <img 
+            :src="tool.logo" 
+            @error="handleLogoError"
+            class="w-full h-full object-contain rounded-2xl" 
+            alt="icon">
         </div>
         <div class="flex gap-6 text-gray-500 text-sm font-medium">
           <!-- 工具收藏按钮 -->
@@ -25,7 +29,7 @@
         <!-- 贡献者 -->
         <div
           class="flex items-center gap-2 mt-2 bg-gray-50 px-3 py-1.5 rounded-full cursor-pointer hover:bg-gray-100 transition-colors">
-          <img :src="user.avatar || '/default-avatar.png'" alt="用户头像" class="w-5 h-5 rounded-full">
+          <img :src="getUserAvatarUrl(user.avatar, user.nickname, user.username)" alt="用户头像" class="w-5 h-5 rounded-full">
           <span class="text-xs text-gray-600">Admin</span>
         </div>
       </div>
@@ -143,16 +147,17 @@
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-3">
               <img
-                :src="comment.avatar || '/default-avatar.png'"
-                class="w-10 h-10 rounded-full border border-gray-300"
+                :src="getUserAvatarUrl(comment.avatar, comment.nickname, '')"
+                class="w-10 h-10 rounded-full border border-gray-300 object-cover"
                 alt="用户头像"
+                @error="handleAvatarError($event, comment)"
               >
               <div>
                 <div class="font-medium text-gray-800">
-                  {{ comment.nickname || comment.username || '匿名用户' }}
+                  {{ comment.nickname || '匿名用户' }}
                 </div>
                 <div class="text-xs text-gray-500">
-                  {{ formatTime(comment.createdAt) }}
+                  {{ formatTime(comment.createdAt || comment.commentDate) }}
                 </div>
               </div>
             </div>
@@ -201,11 +206,15 @@
       <div v-if="isAuthenticated" class="mt-8">
         <div class="flex items-start gap-4">
           <img
-            :src="user.avatar || '/default-avatar.png'"
-            class="w-10 h-10 rounded-full border border-gray-300 flex-shrink-0"
+            :src="getUserAvatarUrl(user?.avatar, user?.nickname, user?.username)"
+            class="w-10 h-10 rounded-full border border-gray-300 flex-shrink-0 object-cover"
             alt="我的头像"
+            @error="handleCommentAvatarError($event)"
           >
           <div class="flex-1">
+            <div class="mb-2 text-sm font-medium text-gray-700">
+              {{ user?.nickname || user?.username || '我' }}
+            </div>
             <textarea
               v-model="newComment"
               placeholder="写下你的评论... (支持emoji表情)"
@@ -257,8 +266,10 @@ import { useStore } from 'vuex'  // 替换 Pinia 导入
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { HttpManager } from '@/api'
 import { predefinedTags } from '@/data/tool/tags'
-import { addMockComment, deleteMockComment, getCommentsByToolId, toggleLikeMockComment } from '@/data/tool/mockData'
+import { deleteMockComment, getCommentsByToolId } from '@/data/tool/mockData'
 import detailSkeleton from '@/components/DetailSkeleton.vue'
+import { getUserAvatarUrl } from '@/utils/avatar'
+import { getImageUrl } from '@/utils/image'
 
 const router = useRouter()
 const route = useRoute()
@@ -335,15 +346,38 @@ const goToToolsListByTag = (tagId) => {
 // 3. 检测该用户是否收藏
 const checkCollectionStatus = async (toolId) => {
   try {
-    // const response = await HttpManager.getUserCollection()
-    const response = await mockGetUserCollection() // 模拟
-    isCollected.value = response.data?.some(item =>
-      item.resourceId === parseInt(toolId) && item.resourceType === 'tool'
+    const token = store.state.token || localStorage.getItem('token')
+    if (!token) {
+      isCollected.value = false
+      return
+    }
+    const response = await HttpManager.getUserCollection()
+    // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
+    // 或者: { islogin: true, data: { tools: [...], resources: [...], teaches: [...] } }
+    let allCollections = []
+    if (response.data) {
+      allCollections = [
+        ...(response.data.tools || []),
+        ...(response.data.resources || []),
+        ...(response.data.teaches || [])
+      ]
+    } else if (response.tools || response.resources || response.teaches) {
+      allCollections = [
+        ...(response.tools || []),
+        ...(response.resources || []),
+        ...(response.teaches || [])
+      ]
+    }
+    isCollected.value = allCollections.some(item =>
+      (item.resourceId || item.resource_id || item.resourceId) === parseInt(toolId) && 
+      (item.resourceType || item.resource_type) === 'tool'
     )
   } catch (error) {
     console.error('检查收藏状态失败:', error)
+    isCollected.value = false
   }
 }
+
 // 4. 收藏功能
 const handleCollect = async () => {
   if (!isAuthenticated.value) {
@@ -351,76 +385,62 @@ const handleCollect = async () => {
     return
   }
   try {
+    // 保存操作前的状态，用于回滚
+    const previousStars = tool.value.stars || 0
+    const previousIsCollected = isCollected.value
+    
     let response
 
     if (isCollected.value) {
       // 取消收藏
-      // await HttpManager.removeToolCollection(tool.value.id, 'tool')
-      response = await mockRemoveToolCollection(tool.value.id, 'tool') // 模拟
+      response = await HttpManager.removeToolCollection(tool.value.id, 'tool')
     } else {
       // 添加收藏
-      // await HttpManager.toggleToolCollection(tool.value.id, 'tool')
-      response = await mockToggleToolCollection(tool.value.id, 'tool') // 模拟
+      response = await HttpManager.toggleToolCollection(tool.value.id, 'tool')
     }
 
-    if (response.code === 200 && response.message) {
-      // 更新收藏状态（前端界面更新）
-      isCollected.value = !isCollected.value
-      tool.value.stars += isCollected.value ? 1 : -1
+    console.log('收藏操作响应:', response)
+
+    // 后端返回格式: { message: "success", data: { iscollected: true/false, collections: number } }
+    if (response && (response.message === 'success' || response.code === 200 || response.data)) {
+      const data = response.data || response
+      console.log('解析后的数据:', data)
+      
+      const newIsCollected = data.iscollected !== undefined ? data.iscollected : !isCollected.value
+      
+      // 更新收藏状态
+      isCollected.value = newIsCollected
+      
+      // 更新工具收藏数
+      // 优先使用后端返回的 collections 值（这是数据库中最准确的）
+      if (data.collections !== undefined && typeof data.collections === 'number' && data.collections >= 0) {
+        tool.value.stars = data.collections
+        console.log('使用后端返回的收藏数:', data.collections)
+      } else {
+        // 如果后端没有返回 collections 或值为无效，则根据收藏状态变化来增减
+        if (newIsCollected && !previousIsCollected) {
+          // 从未收藏变为已收藏，增加1
+          tool.value.stars = previousStars + 1
+          console.log('手动增加收藏数，新值:', tool.value.stars)
+        } else if (!newIsCollected && previousIsCollected) {
+          // 从已收藏变为未收藏，减少1
+          tool.value.stars = Math.max(0, previousStars - 1)
+          console.log('手动减少收藏数，新值:', tool.value.stars)
+        }
+        console.warn('后端未返回有效的 collections 值，使用本地计算:', data.collections)
+      }
 
       ElMessage.success(isCollected.value ? '已收藏' : '已取消收藏')
     } else {
-      throw new Error(response.message || '收藏操作失败')
+      // 操作失败，恢复之前的状态
+      isCollected.value = previousIsCollected
+      tool.value.stars = previousStars
+      throw new Error(response?.message || '收藏操作失败')
     }
   } catch (error) {
+    console.error('收藏操作失败:', error)
     ElMessage.error(error.message || '切换收藏状态操作失败')
   }
-}
-// 为方法4提供的收藏模拟
-let mockUserCollection = []
-const mockGetUserCollection = async () => {
-  return new Promise((resolve) => {
-    // 模拟网络延迟（500毫秒，贴近真实接口体验）
-    setTimeout(() => {
-      // 返回和真实接口结构一致的响应数据
-      resolve({
-        code: 200,
-        data: mockUserCollection, // 包含用户收藏列表
-        message: '获取收藏列表成功'
-      })
-    }, 500)
-  })
-}
-const mockRemoveToolCollection = async (resourceId, resourceType) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // 从模拟收藏列表中删除对应资源
-      mockUserCollection = mockUserCollection.filter(
-        item => !(item.resourceId === resourceId && item.resourceType === resourceType)
-      )
-      resolve({
-        code: 200,
-        message: '取消收藏成功'
-      })
-    }, 500)
-  })
-}
-const mockToggleToolCollection = async (resourceId, resourceType) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // 向模拟收藏列表中添加对应资源（避免重复添加，虽然原逻辑已判断，但模拟后端做一层防护）
-      const isExist = mockUserCollection.some(
-        item => item.resourceId === resourceId && item.resourceType === resourceType
-      )
-      if (!isExist) {
-        mockUserCollection.push({ resourceId, resourceType })
-      }
-      resolve({
-        code: 200,
-        message: '收藏成功'
-      })
-    }, 500)
-  })
 }
 // 5. 加载工具详细信息（在onMounted中使用）
 const loadToolDetail = async (id) => {
@@ -434,7 +454,80 @@ const loadToolDetail = async (id) => {
     const data = await store.dispatch('getToolDetail', id)
     if (!isComponentMounted.value) return
 
-    tool.value = data
+    if (!data) {
+      ElMessage.error('工具不存在或已被删除')
+      router.push('/tools')
+      return
+    }
+
+    // 映射后端字段到前端字段
+    const descriptionDetail = data.description_detail || ''
+    let fullDesc = data.description || '' // 使用 description 作为简短描述
+    let instructions = data.instructions || ''
+    
+    // 如果 description_detail 包含"使用说明："，则分离描述和使用说明
+    if (descriptionDetail.includes('使用说明：')) {
+      const parts = descriptionDetail.split('使用说明：')
+      fullDesc = parts[0].trim() || data.description || ''
+      instructions = parts[1]?.trim() || ''
+    } else if (descriptionDetail) {
+      // 如果 description_detail 存在但不包含"使用说明："，将其作为使用说明
+      // description 作为简短描述，description_detail 作为详细使用说明
+      fullDesc = data.description || ''
+      instructions = descriptionDetail
+    }
+    
+    // 生成基于工具名称的默认 SVG 图标
+    const generateDefaultLogo = (name) => {
+      const toolName = name || '工'
+      const initial = toolName.charAt(0)
+      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8']
+      const colorIndex = initial.charCodeAt(0) % colors.length
+      const bgColor = colors[colorIndex]
+      
+      const svg = `
+        <svg width="112" height="112" xmlns="http://www.w3.org/2000/svg">
+          <rect width="112" height="112" fill="${bgColor}" rx="24"/>
+          <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="48" fill="white" text-anchor="middle" dominant-baseline="central" font-weight="bold">${initial}</text>
+        </svg>
+      `.trim()
+      return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
+    }
+    
+    // 处理logo URL，如果是可能失败的 URL，直接使用默认图标
+    const rawLogoUrl = (data.image && data.image.length > 0) ? data.image[0] : (data.logo || '')
+    let logoUrl = rawLogoUrl
+    
+    // 检查 URL 是否可能失败
+    if (rawLogoUrl && (
+      rawLogoUrl.includes('cdn.simpleicons.org') ||
+      rawLogoUrl.includes('endnote.com') ||
+      rawLogoUrl.includes('150?text=') ||
+      (rawLogoUrl.includes('placehold.co') && !rawLogoUrl.includes('https://'))
+    )) {
+      logoUrl = generateDefaultLogo(data.resourceName || data.name)
+    } else if (!rawLogoUrl || rawLogoUrl === '') {
+      logoUrl = generateDefaultLogo(data.resourceName || data.name)
+    } else {
+      // 使用 getImageUrl 处理相对路径，确保正确指向后端服务器
+      logoUrl = getImageUrl(rawLogoUrl) || generateDefaultLogo(data.resourceName || data.name)
+    }
+    
+    tool.value = {
+      id: data.resourceId || data.id,
+      name: data.resourceName || data.name,
+      logo: logoUrl,
+      fullDesc: fullDesc || data.description || data.fullDesc || '',
+      description: data.description || '',
+      url: data.resourceLink || data.url || '',
+      stars: data.collections || data.stars || 0, // 使用 collections（收藏数）而不是 loves（点赞数）
+      views: data.views || 0,
+      tags: data.tags || [],
+      category: data.catagory || data.category || '',
+      instructions: instructions,
+      isCollected: data.iscollected || false,
+      isLiked: data.isliked || false
+    }
     isLoading.value = false
 
     // 核心数据加载完成后，显示返回按钮并启用工具提交按钮
@@ -442,6 +535,7 @@ const loadToolDetail = async (id) => {
     store.commit('setDisableToolSubmit', false)
 
     // 非核心数据后台加载
+    // 注意：增加浏览量的逻辑已经在 store 的 getToolDetail action 中处理，这里不需要重复调用
     await Promise.allSettled([
       isAuthenticated.value ? checkCollectionStatus(id) : Promise.resolve(),
       fetchComments(id)
@@ -449,6 +543,18 @@ const loadToolDetail = async (id) => {
   } catch (error) {
     if (!isComponentMounted.value) return
     console.error('加载核心数据失败:', error)
+    
+    // 显示错误提示
+    const errorMessage = error.message || '加载工具详情失败，请稍后重试'
+    ElMessage.error(errorMessage)
+    
+    // 如果是404错误，跳转到工具列表页
+    if (error.response?.status === 404 || errorMessage.includes('不存在')) {
+      setTimeout(() => {
+        router.push('/tools')
+      }, 1500)
+    }
+    
     // 即使加载失败，也显示返回按钮（让用户可以返回）
     store.commit('setShowBackButton', true)
   } finally {
@@ -465,12 +571,31 @@ const fetchComments = async (toolId) => {
     const response = await HttpManager.getToolComments(toolId)
     if (!isComponentMounted.value) return // 检查组件是否已卸载
 
-    if (response.code === 200 && response.data) {
-      comments.value = response.data.map(comment => ({
-        ...comment,
-        canDelete: isAuthenticated.value &&
-                  (user.value?.id === comment.userId || user.value?.role === 'admin')
-      }))
+    // 兼容两种后端返回格式：
+    // 格式1: { code: 200, data: [...] }
+    // 格式2: { message: "success", data: [...] }
+    const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+    const commentsData = response?.data || response?.list || []
+    
+    if (isSuccess && Array.isArray(commentsData)) {
+      comments.value = commentsData.map(comment => {
+        // 映射后端字段到前端期望的字段名
+        // 后端返回: { comment_Id, nickname, avater, comment, commentDate, love_count, ... }
+        // 前端期望: { id, userId, nickname, username, avatar, content, createdAt, likes, isLiked, ... }
+        return {
+          id: comment.id || comment.comment_Id || comment.commentId,
+          userId: comment.userId || comment.user_id,
+          nickname: comment.nickname || '匿名用户', // 后端已经使用 COALESCE 处理，确保 nickname 有值，不要使用 username 作为备用
+          username: comment.username || '', // 保留 username 字段但不显示
+          avatar: comment.avatar || comment.avater || '', // 兼容拼写错误
+          content: comment.content || comment.comment || '',
+          createdAt: comment.createdAt || comment.commentDate || '',
+          likes: comment.likes || comment.love_count || 0,
+          isLiked: comment.isLiked || false,
+          canDelete: isAuthenticated.value &&
+                    (user.value?.id === (comment.userId || comment.user_id) || user.value?.role === 'admin')
+        }
+      })
       updatePagination()
     }
   } catch (error) {
@@ -502,12 +627,28 @@ const submitComment = async () => {
   try {
     const response = await HttpManager.addToolComment(tool.value.id, {
       content: (newComment.value || '').trim()
-    }) // 这个api还需要将userId传过去
+    })
 
-    if (response.code === 200 && response.data) {
-      // 添加新评论到列表
+    // 兼容两种后端返回格式：
+    // 格式1: { code: 200, data: {...} }
+    // 格式2: { message: "success", data: {...} }
+    const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+    const commentData = response?.data
+
+    if (isSuccess && commentData) {
+      // 映射后端字段到前端期望的字段名
+      // 后端返回: { id, commentId, userId, nickname, username, avatar, content, comment, createdAt, commentDate, likes, love_count, isLiked, ... }
+      // 前端期望: { id, userId, nickname, username, avatar, content, createdAt, likes, isLiked, ... }
       const newCommentData = {
-        ...response.data,
+        id: commentData.id || commentData.comment_Id || commentData.commentId,
+        userId: commentData.userId || commentData.user_id,
+        nickname: commentData.nickname || '匿名用户', // 后端已经使用 COALESCE 处理，确保 nickname 有值，不要使用 username 作为备用
+        username: commentData.username || '', // 保留 username 字段但不显示
+        avatar: commentData.avatar || commentData.avater || '', // 兼容拼写错误
+        content: commentData.content || commentData.comment || '',
+        createdAt: commentData.createdAt || commentData.commentDate || new Date().toISOString(),
+        likes: commentData.likes || commentData.love_count || 0,
+        isLiked: commentData.isLiked || false,
         canDelete: true // 用户自己的评论可以删除
       }
       comments.value.unshift(newCommentData)
@@ -515,20 +656,11 @@ const submitComment = async () => {
       newComment.value = ''
       ElMessage.success('评论发表成功')
     } else {
-      throw new Error(response.message || '发表评论失败')
+      throw new Error(response?.message || '发表评论失败')
     }
   } catch (error) {
-    // ElMessage.error(error.message || '发表失败')
-
-    // 以下是模拟时使用
-    // API失败时使用模拟数据
-    console.error('发布评论失败，使用模拟数据:', error)
-    const newCommentData = addMockComment(tool.value.id, newComment.value)
-    comments.value.unshift({ ...newCommentData, canDelete: true })
-
-    updatePagination()
-    newComment.value = ''
-    ElMessage.success('评论发布成功')
+    console.error('发布评论失败:', error)
+    ElMessage.error(error.message || '发表评论失败')
   } finally {
     submittingComment.value = false
   }
@@ -581,16 +713,25 @@ const handleLikeComment = async (commentId) => {
   }
   try {
     const response = await HttpManager.toggleCommentLike(tool.value.id, commentId)
-    if (response.code === 200 && response.data) {
+    
+    // 后端返回格式: { message: "success", data: { isliked: true/false, likes: number } }
+    // 兼容两种格式: { code: 200, data: {...} } 或 { message: "success", data: {...} }
+    const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+    const responseData = response?.data
+    
+    if (isSuccess && responseData) {
       // 更新评论的点赞状态
       const commentIndex = comments.value.findIndex(c => c.id === commentId)
       if (commentIndex !== -1) {
         const comment = comments.value[commentIndex]
-        const wasLiked = comment.isLiked
+        // 使用后端返回的最新状态，而不是根据之前的状态切换
+        const newIsLiked = responseData.isliked !== undefined ? responseData.isliked : responseData.isLiked !== undefined ? responseData.isLiked : !comment.isLiked
+        const newLikes = responseData.likes !== undefined ? responseData.likes : (newIsLiked ? comment.likes + 1 : Math.max(0, comment.likes - 1))
+        
         comments.value[commentIndex] = {
           ...comment,
-          likes: wasLiked ? comment.likes - 1 : comment.likes + 1,
-          isLiked: !wasLiked
+          likes: newLikes,
+          isLiked: newIsLiked
         }
         // 如果需要重新排序
         if (sortType.value === 'hot') {
@@ -598,30 +739,13 @@ const handleLikeComment = async (commentId) => {
           comments.value = [...comments.value]
         }
       }
-      ElMessage.success(response.data.isLiked ? '已点赞' : '已取消点赞')
+      ElMessage.success(responseData.isliked || responseData.isLiked ? '已点赞' : '已取消点赞')
     } else {
-      throw new Error(response.message || '操作失败')
+      throw new Error(response?.message || '操作失败')
     }
   } catch (error) {
-    // ElMessage.error(error.message || '操作失败')
-
-    // 以下是模拟时使用
-    // API失败时使用模拟数据
-    console.error('点赞评论失败，使用模拟数据:', error)
-    toggleLikeMockComment(commentId)
-    // 更新评论的点赞状态
-    const commentIndex = comments.value.findIndex(c => c.id === commentId)
-    if (commentIndex !== -1) {
-      const comment = comments.value[commentIndex]
-      const wasLiked = comment.isLiked
-      comments.value[commentIndex] = {
-        ...comment,
-        likes: wasLiked ? comment.likes - 1 : comment.likes + 1,
-        isLiked: !wasLiked
-      }
-      console.log(comments.value[commentIndex].isLiked)
-      ElMessage.success('点赞成功')
-    }
+    console.error('点赞评论失败:', error)
+    ElMessage.error(error.message || '点赞评论失败')
   }
 }
 
@@ -662,6 +786,67 @@ const goToLogin = () => {
   router.push({ name: 'Login' })
 }
 // 16. 格式化时间显示
+// 处理评论头像加载错误
+const handleAvatarError = (event, comment) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认头像，不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml') || currentSrc.includes('/default-avatar.png')) {
+    return
+  }
+  
+  // 使用昵称的第一个字符生成默认头像（不使用用户名作为备用）
+  const name = comment?.nickname || '匿名'
+  const defaultAvatarUrl = getUserAvatarUrl('', name, '')
+  
+  event.target.src = defaultAvatarUrl
+}
+
+// 处理发表评论区域的头像加载错误
+const handleCommentAvatarError = (event) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认头像，不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml') || currentSrc.includes('/default-avatar.png')) {
+    return
+  }
+  
+  // 使用当前登录用户的昵称或用户名的第一个字符生成默认头像
+  const name = user.value?.nickname || user.value?.username || '我'
+  const defaultAvatarUrl = getUserAvatarUrl('', name, user.value?.username || '')
+  
+  event.target.src = defaultAvatarUrl
+}
+
+// 处理logo加载错误
+const handleLogoError = (event) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标，不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml') || currentSrc.includes('/default-avatar.png')) {
+    return
+  }
+  
+  // 使用工具名称的第一个字符生成默认图标
+  const toolName = tool.value?.name || '工'
+  const initial = toolName.charAt(0)
+  
+  // 生成SVG默认图标
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8']
+  const colorIndex = initial.charCodeAt(0) % colors.length
+  const bgColor = colors[colorIndex]
+  
+  const svg = `
+    <svg width="112" height="112" xmlns="http://www.w3.org/2000/svg">
+      <rect width="112" height="112" fill="${bgColor}" rx="24"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="48" fill="white" text-anchor="middle" dominant-baseline="central" font-weight="bold">${initial}</text>
+    </svg>
+  `.trim()
+  const svgUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
+  
+  event.target.src = svgUrl
+}
+
 const formatTime = (timeString) => {
   if (!timeString) return ''
   const now = new Date()
@@ -687,8 +872,20 @@ const formatTime = (timeString) => {
 
 // 四、生命周期函数
 // 1. 组件加载时加载数据
-onMounted(() => {
+onMounted(async () => {
   isComponentMounted.value = true
+  
+  // 如果用户已登录但用户信息未加载，先获取用户信息
+  const token = store.state.token || localStorage.getItem('token')
+  if (token && (!user.value?.id && !user.value?.username)) {
+    try {
+      await store.dispatch('initAuth')
+      console.log('用户信息已加载:', user.value)
+    } catch (error) {
+      console.warn('初始化用户信息失败:', error)
+    }
+  }
+  
   const id = route.params.id
   loadToolDetail(id)
 })

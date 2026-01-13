@@ -1,13 +1,9 @@
 import { get, post, put, deletes } from './request'
 
 export const userAPI = {
-  // 获取用户资料
-  getProfile: (token) => {
-    return get('/users/profile', {}, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+  // 获取用户资料（token 已在请求拦截器中自动添加）
+  getProfile: () => {
+    return get('/users/profile', {})
   },
 
   // 更新用户资料
@@ -29,49 +25,29 @@ export const userAPI = {
     })
   },
 
-  // 获取审核状态
-  getReviewStatus: (token) => {
-    return get('/users/status', {}, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+  // 获取审核状态（token 已在请求拦截器中自动添加）
+  getReviewStatus: () => {
+    return get('/users/status', {})
   },
 
-  // 获取个人收藏
-  getCollection: (token) => {
-    return get('/users/collection', {}, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+  // 获取个人收藏（token 已在请求拦截器中自动添加，不需要传递）
+  getCollection: () => {
+    return get('/users/collection', {})
   },
 
-  // 取消收藏
-  deleteCollection: (resourceType, resourceId, token) => {
-    return deletes(`/users/collection/${resourceType}/${resourceId}/`, {}, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+  // 取消收藏（token 已在请求拦截器中自动添加，不需要传递）
+  deleteCollection: (resourceType, resourceId) => {
+    return deletes(`/users/collection/${resourceType}/${resourceId}/`)
   },
 
-  // 获取个人提交
-  getSubmissions: (token) => {
-    return get('/users/summit', {}, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+  // 获取个人提交（token 已在请求拦截器中自动添加）
+  getSubmissions: () => {
+    return get('/users/summit', {})
   },
 
-  // 更新提交状态
-  updateSubmissionStatus: (resourceType, resourceId, data, token) => {
-    return put(`/users/status/${resourceType}/${resourceId}/statu`, data, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+  // 更新提交状态（token 已在请求拦截器中自动添加）
+  updateSubmissionStatus: (resourceType, resourceId, data) => {
+    return put(`/users/status/${resourceType}/${resourceId}/statu`, data)
   },
 
   // 更新邮箱
@@ -116,16 +92,18 @@ const HttpManager = {
   // 登出
   logout: () => post('users/logout'),
   // =======================> 用户 API
-  // 获取用户资料
-  getUserProfile: (token) => userAPI.getProfile(token),
+  // 获取用户资料（token 已在请求拦截器中自动添加）
+  getUserProfile: () => userAPI.getProfile(),
   // 更新用户资料
   updateUserProfile: (data, token) => userAPI.updateProfile(data, token),
   // 获取审核状态
-  getReviewStatus: (token) => userAPI.getReviewStatus(token),
-  // 获取个人收藏
-  getUserCollection: (token) => userAPI.getCollection(token),
+  getReviewStatus: () => userAPI.getReviewStatus(),
+  // 获取个人收藏（token 已在请求拦截器中自动添加）
+  getUserCollection: () => userAPI.getCollection(),
+  // 取消收藏（token 已在请求拦截器中自动添加）
+  deleteCollection: (resourceType, resourceId) => userAPI.deleteCollection(resourceType, resourceId),
   // 获取个人提交
-  getUserSubmissions: (token) => userAPI.getSubmissions(token),
+  getUserSubmissions: () => userAPI.getSubmissions(),
   // 更新密码
   updatePassword: (data, token) => userAPI.updatePassword(data, token),
   // 更新邮箱
@@ -135,9 +113,24 @@ const HttpManager = {
   searchTools: (params) => get('tools/search', params),
   getToolDetail: (resourceId, resourceType) => get(`tools/${resourceId}`, { resourceType }),
   submitTool: (params) => post('tools/submit', params),
+  updateTool: (resourceId, params) => put(`tools/${resourceId}`, params),
   addToolView: (resourceId) => post(`tools/${resourceId}/views`),
-  toggleToolCollection: (resourceId, resourceType) => post(`tools/${resourceId}/collections`, { resourceType }),
-  removeToolCollection: (resourceId, resourceType) => deletes(`tools/${resourceId}/collections`, { resourceType }),
+  
+  // 图片上传
+  uploadImage: (file) => {
+    const formData = new FormData()
+    formData.append('image', file)
+    return post('api/upload/image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+  
+  // 处理图片URL（自动本地化）
+  processImageURL: (url) => post('api/upload/process', { url }),
+  toggleToolCollection: (resourceId, resourceType) => post(`tools/${resourceId}/collections?resourceType=${resourceType || 'tool'}`, { resourceType: resourceType || 'tool' }),
+  removeToolCollection: (resourceId, resourceType) => deletes(`tools/${resourceId}/collections?resourceType=${resourceType || 'tool'}`),
   addToolCommentReply: (resourceId, commentId, resourceType, params) =>
     post(`tools/${resourceId}/comments/${commentId}/reply`, { resourceType, ...params }),
   deleteToolCommentReply: (resourceId, commentId) =>
@@ -159,22 +152,29 @@ const HttpManager = {
   addCourseView: (courseId) => post(`course/${courseId}/view`), // 增加课程浏览量
 
   // 课程收藏相关
-  toggleCourseCollection: (courseId, resourceType) => post(`course/${courseId}/collections`, { resourceType }), // 收藏课程
-  removeCourseCollection: (courseId, resourceType) => deletes(`course/${courseId}/collections`, { resourceType }), // 取消收藏课程
+  toggleCourseCollection: (courseId) => post(`course/${courseId}/collections`), // 收藏课程
+  removeCourseCollection: (courseId) => deletes(`course/${courseId}/collections`), // 取消收藏课程
 
   // 课程点赞相关
   toggleCourseLike: (courseId) => post(`course/${courseId}/like`), // 点赞课程
   removeCourseLike: (courseId) => deletes(`course/${courseId}/like`), // 取消点赞课程
 
   // 课程评论相关
-  getCourseComments: (courseId) => get(`course/${courseId}/comments`), // 获取课程评论
+  getCourseComments: (courseId, params) => get(`course/${courseId}/comments`, params), // 获取课程评论（支持cursor和limit参数）
   addCourseComment: (courseId, params) => post(`course/${courseId}/comments`, params), // 发表课程评论
   deleteCourseComment: (courseId, commentId) => deletes(`course/${courseId}/comments/${commentId}`), // 删除课程评论
   toggleCourseCommentLike: (courseId, commentId) => post(`course/${courseId}/comments/${commentId}/like`), // 点赞/取消点赞课程评论
 
   // 课程资源相关
   getCourseResources: (courseId) => get(`course/${courseId}/resources`), // 获取课程资源
-  addCourseResource: (courseId, params) => post(`course/${courseId}/resources`, params), // 添加课程资源
+  addCourseResource: (courseId, params) => {
+    // resourceType 作为查询参数传递
+    const resourceType = params.resourceType || 'teach'
+    // 创建新对象，排除 resourceType 字段
+    const restParams = { ...params }
+    delete restParams.resourceType
+    return post(`course/${courseId}/resources?resourceType=${resourceType}`, restParams)
+  }, // 添加课程资源
 
   // 课程学习相关
   addCourseToLearningPlan: (courseId) => post(`course/${courseId}/learning-plan`), // 加入学习计划
@@ -198,7 +198,7 @@ const HttpManager = {
   toggleProjectLike: (projectId) => post(`projects/${projectId}/like`),
   removeProjectLike: (projectId) => deletes(`projects/${projectId}/like`),
   addProjectComment: (projectId, params) => post(`projects/${projectId}/comments`, params),
-  deleteProjectComment: (projectId) => deletes(`projects/${projectId}/comments`),
+  deleteProjectComment: (projectId, commentId) => deletes(`projects/${projectId}/comments/${commentId}`),
   addProjectCommentReply: (projectId, commentId, params) =>
     post(`projects/${projectId}/comments/${commentId}/reply`, params),
   deleteProjectCommentReply: (projectId, commentId) =>
@@ -207,6 +207,7 @@ const HttpManager = {
   toggleProjectCollection: (projectId) => post(`projects/${projectId}/collected`),
   removeProjectCollection: (projectId) => deletes(`projects/${projectId}/collected`),
   getProjectComments: (projectId) => get(`projects/${projectId}/comments`),
+  toggleProjectCommentLike: (projectId, commentId) => post(`projects/${projectId}/comments/${commentId}/like`), // 点赞/取消点赞项目评论
 
   // =======================> 管理员 API
   getPendingReviews: (params) => get('admin/pending', params),

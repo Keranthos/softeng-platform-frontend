@@ -80,54 +80,12 @@
               <!-- 移除了右侧的叉叉按钮 -->
             </div>
 
-            <!-- 添加自定义导航按钮 -->
-            <div
-              v-if="!isSidebarCollapsed"
-              class="nav-item add-item"
-              @click.stop="toggleAddMenu"
-            >
-              <i class="fas fa-plus nav-icon"></i>
-              <span class="nav-text">添加导航</span>
-
-              <!-- 添加菜单 -->
-              <div v-if="showAddMenu" class="add-menu">
-                <div
-                  v-for="option in addMenuOptions"
-                  :key="option.name"
-                  @click.stop="handleAddMenuClick(option)"
-                  class="add-option"
-                >
-                  <i :class="['fas', option.icon, 'option-icon']"></i>
-                  <span class="option-name">{{ option.name }}</span>
-                  <div class="option-status">
-                    <i v-if="isCustomItemAdded(option.name, option.icon)"
-                       class="fas fa-minus remove-icon"></i>
-                    <i v-else class="fas fa-plus add-icon"></i>
-                  </div>
-                </div>
-              </div>
-            </div>
           </nav>
         </aside>
 
         <!-- 主内容区 -->
         <main :class="['main-content', isSidebarCollapsed ? 'no-margin' : 'with-margin']">
           <div class="header-section">
-            <!-- 三个快捷按钮 -->
-            <div class="item-wrapper">
-              <div class="quick-links">
-                <a href="https://www.msn.com/zh-cn/lifestyle/calendar" target="_blank" class="quick-bubble">
-                  <i class="far fa-calendar-alt icon-margin"></i>日历
-                </a>
-                <a href="https://image.baidu.com/" target="_blank" class="quick-bubble">
-                  <i class="far fa-image icon-margin"></i>图片搜索
-                </a>
-                <a href="https://www.bilibili.com/v/popular/all" target="_blank" class="quick-bubble">
-                  <i class="fas fa-fire icon-margin"></i>B站热点
-                </a>
-              </div>
-            </div>
-
             <!-- 搜索框区域 -->
             <div class="search-wrapper">
               <!-- 左侧：日期 -->
@@ -167,23 +125,29 @@
                 <button @click="doSearch" class="search-btn">搜索</button>
               </div>
 
-              <!-- 右侧：时间 -->
+              <!-- 右侧：时间和头像 -->
               <div class="time-wrapper">
+                <div class="time-content">
+                  <div class="time-big">{{ currentTime }}</div>
+                  <div class="time-small">今天也要加油哦！</div>
+                </div>
                 <!-- 头像 -->
                 <div class="avatar-container">
                   <button @click.stop="toggleDropdown" class="avatar-btn">
-                    <span :class="['avatar-initial', isLoggedIn ? 'login-avatar' : 'guest-avatar']">
-                      {{ userInitial }}
-                    </span>
+                    <img 
+                      :src="userAvatar" 
+                      :alt="userInitial"
+                      class="avatar-img"
+                      @error="handleAvatarError"
+                    />
                   </button>
                   <div v-if="dropdownOpen" class="dropdown-menu">
-                    <a href="/profile" class="dropdown-item login-option">个人主页</a>
+                    <a v-if="isLoggedIn" href="/profile" class="dropdown-item login-option">个人主页</a>
+                    <div v-else class="dropdown-item login-option text-gray-400 cursor-not-allowed opacity-60">个人主页（请先登录）</div>
                     <a v-if="isLoggedIn" href="/logout" class="dropdown-item login-option">退出登陆</a>
                     <a v-else href="/" class="dropdown-item login-option">点击登录</a>
                   </div>
                 </div>
-                <div class="time-big">{{ currentTime }}</div>
-                <div class="time-small">今天也要加油哦！</div>
               </div>
             </div>
           </div>
@@ -203,7 +167,12 @@
                   rel="noopener noreferrer"
                   class="item-card-small"
                 >
-                  <img :src="site.icon" :alt="site.name" class="item-icon-small" />
+                  <img 
+                    :src="getImageUrl(site.icon) || generateDefaultIcon(site.name, 'common')" 
+                    :alt="site.name" 
+                    class="item-icon-small"
+                    @error="handleImageError($event, site.name, 'common')"
+                  />
                   <div class="item-content-small">
                     <h3 class="item-name-small">{{ site.name }}</h3>
                     <p class="item-desc-small">{{ site.desc }}</p>
@@ -221,20 +190,23 @@
             </div>
             <section id="tools" class="section-card">
               <div class="grid-layout">
-                <a
+                <router-link
                   v-for="(tool, i) in homeTools"
                   :key="i"
-                  :href="tool.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  :to="tool.url"
                   class="item-card-small"
                 >
-                  <img :src="tool.icon" :alt="tool.name" class="item-icon-small" />
+                  <img 
+                    :src="tool.icon || generateDefaultIcon(tool.name, 'tool')" 
+                    :alt="tool.name" 
+                    class="item-icon-small"
+                    @error="handleImageError($event, tool.name, 'tool')"
+                  />
                   <div class="item-content-small">
                     <h3 class="item-name-small">{{ tool.name }}</h3>
                     <p class="item-desc-small">{{ tool.desc }}</p>
                   </div>
-                </a>
+                </router-link>
               </div>
             </section>
           </div>
@@ -247,20 +219,23 @@
             </div>
             <section id="course" class="section-card">
               <div class="grid-layout">
-                <a
+                <router-link
                   v-for="(c, i) in course"
                   :key="i"
-                  :href="c.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  :to="c.url"
                   class="item-card-small"
                 >
-                  <img :src="c.icon" :alt="c.name" class="item-icon-small" />
+                  <img 
+                    :src="c.icon || generateDefaultIcon(c.name, 'course')" 
+                    :alt="c.name" 
+                    class="item-icon-small"
+                    @error="handleImageError($event, c.name, 'course')"
+                  />
                   <div class="item-content-small">
                     <h3 class="item-name-small">{{ c.name }}</h3>
                     <p class="item-desc-small">{{ c.desc }}</p>
                   </div>
-                </a>
+                </router-link>
               </div>
             </section>
           </div>
@@ -269,53 +244,31 @@
           <div class="section-container">
             <div class="section-header">
               <h2 class="section-title-text">项目情况</h2>
-              <a href="/projects" class="more-btn-small">更多 →</a>
+              <router-link to="/projects" class="more-btn-small">更多 →</router-link>
             </div>
             <section id="projects" class="section-card">
               <div class="grid-layout">
-                <a
+                <router-link
                   v-for="(p, i) in homeProjects"
                   :key="i"
-                  :href="p.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  :to="p.url"
                   class="item-card-small"
                 >
-                  <img :src="p.icon" :alt="p.name" class="item-icon-small" />
+                  <img 
+                    :src="p.icon || generateDefaultIcon(p.name, 'project')" 
+                    :alt="p.name" 
+                    class="item-icon-small"
+                    @error="handleImageError($event, p.name, 'project')"
+                  />
                   <div class="item-content-small">
                     <h3 class="item-name-small">{{ p.name }}</h3>
                     <p class="item-desc-small">{{ p.desc }}</p>
                   </div>
-                </a>
+                </router-link>
               </div>
             </section>
           </div>
 
-          <!-- 审核状态（仅管理员可见）-->
-          <div v-if="isAdmin" class="section-container">
-            <div class="section-header">
-              <h2 class="section-title-text text-red">审核状态</h2>
-              <a href="#" class="more-btn-small">更多 →</a>
-            </div>
-            <section id="review" class="section-card">
-              <div class="grid-layout">
-                <a
-                  v-for="(item, i) in reviewItems"
-                  :key="i"
-                  :href="item.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="item-card-small"
-                >
-                  <img :src="item.icon" :alt="item.name" class="item-icon-small" />
-                  <div class="item-content-small">
-                    <h3 class="item-name-small">{{ item.name }}</h3>
-                    <p class="item-desc-small">{{ item.desc }}</p>
-                  </div>
-                </a>
-              </div>
-            </section>
-          </div>
         </main>
       </div>
     </div>
@@ -327,19 +280,76 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import logoImg from '@/assets/logo.png'
+import { getUserAvatarUrl } from '@/utils/avatar'
+import { getImageUrl } from '@/utils/image'
 
 const store = useStore()
 const router = useRouter()
 
 // ========== 从 Vuex Store 获取状态 ==========
 const isLoggedIn = computed(() => store.getters.isLoggedIn)
-const isAdmin = computed(() => store.getters.isAdmin)
 const userInitial = computed(() => store.getters.getUserInitial)
+const user = computed(() => store.state.user)
+
+// 获取用户头像URL（如果没有头像，会返回默认头像）
+const userAvatar = computed(() => {
+  if (isLoggedIn.value && user.value) {
+    return getUserAvatarUrl(
+      user.value.avatar || user.value.avater || '', 
+      user.value.nickname || '', 
+      user.value.username || ''
+    )
+  }
+  // 未登录时，返回访客默认头像
+  return getUserAvatarUrl('', '', '访')
+})
+
+// 处理头像加载错误（如果图片加载失败，尝试使用默认头像）
+const handleAvatarError = (event) => {
+  // getUserAvatarUrl 应该总是返回有效的URL，但如果加载失败，尝试使用默认头像
+  const defaultAvatar = getUserAvatarUrl('', user.value?.nickname || user.value?.username || '访', user.value?.username || '')
+  if (event.target && event.target.src !== defaultAvatar) {
+    event.target.src = defaultAvatar
+  }
+}
+
+// 生成默认图片（基于名称的第一个字符）
+const generateDefaultIcon = (name, type = 'tool') => {
+  const displayName = name || (type === 'tool' ? '工' : type === 'course' ? '课' : '项')
+  const initial = displayName.charAt(0)
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2']
+  const colorIndex = initial.charCodeAt(0) % colors.length
+  const bgColor = colors[colorIndex]
+  
+  const svg = `
+    <svg width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+      <rect width="48" height="48" fill="${bgColor}" rx="12"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle" dominant-baseline="central" font-weight="bold">${initial}</text>
+    </svg>
+  `.trim()
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
+}
+
+// 处理图片加载错误
+const handleImageError = (event, name, type = 'tool') => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标（SVG），不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml')) {
+    return
+  }
+  
+  // 使用名称生成默认图标
+  const defaultIcon = generateDefaultIcon(name, type)
+  
+  if (event.target.src !== defaultIcon) {
+    event.target.src = defaultIcon
+  }
+}
 
 // 首页状态
 const homeActiveSection = computed(() => store.getters.homeActiveSection)
 const isSidebarCollapsed = computed(() => store.getters.isSidebarCollapsed)
-const showAddMenu = computed(() => store.getters.showAddMenu)
 const dropdownOpen = computed(() => store.getters.dropdownOpen)
 const engineMenuOpen = computed(() => store.getters.engineMenuOpen)
 const searchEngine = computed(() => store.getters.searchEngine)
@@ -356,7 +366,6 @@ const commonSites = computed(() => store.getters.commonSites)
 const homeTools = computed(() => store.getters.homeTools)
 const course = computed(() => store.getters.course)
 const homeProjects = computed(() => store.getters.homeProjects)
-const reviewItems = computed(() => store.getters.reviewItems)
 const visibleSidebarItems = computed(() => store.getters.visibleSidebarItems)
 const engines = computed(() => store.getters.engines)
 const currentEngineName = computed(() => store.getters.currentEngineName)
@@ -388,49 +397,6 @@ const particleTypes = [
   { class: 'type-4', baseSize: 4, count: 25, opacity: 0.4, speed: 0.2 },
   { class: 'type-5', baseSize: 10, count: 8, opacity: 0.9, speed: 0.6 }
 ]
-
-const addMenuOptions = [
-  { name: '我的博客', icon: 'fa-blog' },
-  { name: '音乐', icon: 'fa-music' },
-  { name: 'AI工具', icon: 'fa-robot' },
-  { name: 'ChatGPT', icon: 'fa-brain' }
-]
-
-const isCustomItemAdded = (name, icon) => {
-  return visibleSidebarItems.value.some(item =>
-    item.custom && item.name === name && item.icon === icon
-  )
-}
-
-const getCustomItemId = (name, icon) => {
-  const item = visibleSidebarItems.value.find(item =>
-    item.custom && item.name === name && item.icon === icon
-  )
-  return item ? item.id : null
-}
-
-const handleAddMenuClick = (option) => {
-  const isAlreadyAdded = isCustomItemAdded(option.name, option.icon);
-
-  if (isAlreadyAdded) {
-    // 如果已添加，则移除
-    const itemId = getCustomItemId(option.name, option.icon);
-    if (itemId) {
-      store.dispatch('removeCustomNavigation', itemId);
-      showToast('导航已移除');
-    }
-  } else {
-    // 如果未添加，则添加
-    store.dispatch('addCustomNavigation', {
-      name: option.name,
-      icon: option.icon
-    });
-    showToast('导航已添加');
-  }
-
-  // 关闭菜单
-  store.commit('setHomeMenuState', { menu: 'add', isOpen: false });
-}
 
 // 系统配置
 const systemConfig = ref({
@@ -706,10 +672,6 @@ const toggleSidebar = () => {
 }
 
 // 菜单切换
-const toggleAddMenu = () => {
-  store.commit('setHomeMenuState', { menu: 'add', isOpen: !showAddMenu.value })
-}
-
 const toggleDropdown = () => {
   store.commit('setHomeMenuState', { menu: 'dropdown', isOpen: !dropdownOpen.value })
 }
@@ -725,7 +687,7 @@ const selectEngine = (value) => {
 
 // 执行搜索
 const doSearch = () => {
-  store.dispatch('doSearch')
+  store.dispatch('doSearch', { router })
 
   // 搜索后的粒子效果
   particles.value.forEach((p, index) => {
@@ -768,25 +730,17 @@ const handleNavItem = (item) => {
   store.dispatch('handleNavItem', { item, router })
 }
 
-const showToast = (message) => {
-  // 这里可以添加您的toast提示逻辑
-  console.log(message)
-}
 
 // 关闭所有菜单
 const closeMenus = (e) => {
   if (!e.target.closest('.avatar-btn') &&
-    !e.target.closest('.add-item') &&
     !e.target.closest('.engine-wrapper')) {
     store.dispatch('closeAllMenus')
   }
 }
 
-watch([showAddMenu, dropdownOpen, engineMenuOpen], ([addOpen, dropdownOpenVal, engineOpen]) => {
-  // 如果其他菜单打开，关闭添加菜单
-  if (!addOpen && (dropdownOpenVal || engineOpen)) {
-    // 什么都不做，让其他菜单保持打开
-  }
+watch([dropdownOpen, engineMenuOpen], () => {
+  // 菜单状态监听
 })
 
 onMounted(async () => {
@@ -799,6 +753,13 @@ onMounted(async () => {
 
   // 初始化认证状态
   await store.dispatch('initAuth')
+
+  // 获取首页数据（精选工具、课程浏览、项目情况）
+  await Promise.all([
+    store.dispatch('fetchHomeTools'),
+    store.dispatch('fetchHomeCourses'),
+    store.dispatch('fetchHomeProjects')
+  ])
 
   document.addEventListener('click', closeMenus)
 

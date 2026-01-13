@@ -10,7 +10,6 @@
         <ul class="list-disc ml-5 space-y-1">
           <li>请确保工具链接有效且无恶意插件。</li>
           <li>简介请客观描述，禁止广告用语。</li>
-          <li>若链接正确填写，<span class="text-purple-600 font-bold">点击一键填写后调用LLM对链接对应的网站进行分析，并自动填写各项内容。</span></li>
         </ul>
       </div>
     </div>
@@ -39,6 +38,10 @@
                 <i class="fas fa-circle text-[4px]"></i>
                 <span>{{ formErrors.desc }}</span>
               </li>
+              <li v-if="formErrors.fullDesc" class="text-sm text-red-600 flex items-center gap-2">
+                <i class="fas fa-circle text-[4px]"></i>
+                <span>{{ formErrors.fullDesc }}</span>
+              </li>
               <li v-if="formErrors.tags" class="text-sm text-red-600 flex items-center gap-2">
                 <i class="fas fa-circle text-[4px]"></i>
                 <span>{{ formErrors.tags }}</span>
@@ -55,13 +58,41 @@
     <div class="flex gap-6 items-start">
       <div class="flex-1 bg-white/80 backdrop-blur-md rounded-3xl p-8 shadow-lg border border-white/60">
         <!-- 左侧内容区域 -->
-        <!-- 图标上传 -->
+        <!-- 图标设置 -->
         <div class="mb-6">
           <label class="block text-sm font-bold text-gray-700 mb-2">图标:</label>
-          <div class="w-24 h-24 bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors border-2 border-dashed border-gray-300 group overflow-hidden relative">
-            <img v-if="form.icon" :src="form.icon" alt='' class="w-full h-full object-cover">
-            <i v-else class="fas fa-plus text-3xl text-gray-400 group-hover:text-gray-600"></i>
-            <input type="file" class="absolute inset-0 opacity-0 cursor-pointer" @change="handleIconUpload" accept="image/*">
+          <div class="flex gap-4 items-start">
+            <!-- 图标预览 -->
+            <div class="w-24 h-24 bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden flex-shrink-0">
+              <img v-if="form.icon" :src="getImageUrl(form.icon)" alt='图标预览' class="w-full h-full object-cover" @error="handleIconError">
+              <i v-else class="fas fa-image text-3xl text-gray-400"></i>
+            </div>
+            <!-- 图标输入方式选择 -->
+            <div class="flex-1 space-y-3">
+              <!-- URL输入 -->
+              <div>
+                <label class="text-xs text-gray-500 mb-1 block">图标URL（推荐）</label>
+                <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2 border border-gray-200 focus-within:border-blue-500 focus-within:ring-2 ring-blue-100 transition-all">
+                  <i class="fas fa-link text-gray-400"></i>
+                  <input v-model="form.icon" type="text" placeholder="https://example.com/icon.png"
+                    class="bg-transparent border-none outline-none flex-1 text-gray-700 text-sm">
+                </div>
+                <p class="text-xs text-gray-400 mt-1">支持外部图片链接，如：https://example.com/icon.png</p>
+              </div>
+              <!-- 文件上传 -->
+              <div>
+                <label class="text-xs text-gray-500 mb-1 block">或上传本地图片</label>
+                <div class="relative">
+                  <input type="file" @change="handleIconUpload" accept="image/*" class="hidden" ref="iconFileInput">
+                  <button @click="$refs.iconFileInput.click()" type="button"
+                    class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-upload"></i>
+                    选择图片文件
+                  </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">上传后将自动保存到服务器</p>
+              </div>
+            </div>
           </div>
         </div>
         <!-- 工具信息输入 -->
@@ -74,18 +105,13 @@
           </div>
         </div>
         <!-- 工具链接输入 -->
-        <div class="mb-4 relative">
+        <div class="mb-4">
           <div
             class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200 focus-within:border-blue-500 focus-within:ring-2 ring-blue-100 transition-all">
             <i class="fas fa-link text-gray-400"></i>
             <input v-model="form.url" type="text" placeholder="https://example.com"
               class="bg-transparent border-none outline-none flex-1 text-gray-700">
           </div>
-          <button @click="handleAutoFill" :disabled="isAnalyzing"
-            class="absolute right-1 top-1 bottom-1 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white px-4 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
-            <i v-if="isAnalyzing" class="fas fa-spinner fa-spin"></i>
-            {{ isAnalyzing ? '分析中...' : '一键填写' }}
-          </button>
         </div>
         <!-- 工具描述 -->
         <div class="mb-4">
@@ -101,8 +127,10 @@
         </div>
         <!-- 工具使用说明 -->
         <div class="mb-4">
-          <textarea v-model="form.fullDesc" placeholder="工具使用说明..."
-            class="w-full h-40 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200 focus:border-blue-500 outline-none resize-none text-gray-700"></textarea>
+          <label class="block text-sm font-bold text-gray-700 mb-2">工具使用说明 <span class="text-red-500">*</span>:</label>
+          <textarea v-model="form.fullDesc" placeholder="请输入工具使用说明（必填）..."
+            :class="['w-full h-40 bg-gray-50 rounded-xl px-4 py-3 border outline-none resize-none text-gray-700', formErrors.fullDesc ? 'border-red-500' : 'border-gray-200 focus:border-blue-500']"></textarea>
+          <p v-if="formErrors.fullDesc" class="text-xs text-red-500 mt-1">{{ formErrors.fullDesc }}</p>
         </div>
       </div>
 
@@ -228,7 +256,7 @@
           <div class="pt-4 border-t border-gray-100">
             <button @click="submit" :disabled="isSubmitting"
               class="w-full bg-[#bf1e2e] hover:bg-[#a01825] text-white font-bold py-3 rounded-xl shadow-lg shadow-red-200 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-400 disabled:hover:bg-gray-400 disabled:text-gray-100 disabled:shadow-none disabled:opacity-70">
-              <i class="fas fa-file-export"></i> 提交审核
+              <i class="fas fa-file-export"></i> {{ isEditMode ? '保存修改' : '提交审核' }}
             </button>
           </div>
         </div>
@@ -240,9 +268,14 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'  // 替换 Pinia 导入
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { predefinedTags } from '@/data/tool/tags'
-// import { HttpManager } from '@/api'
+import { HttpManager } from '@/api'
+import { getImageUrl } from '@/utils/image'
+
+const route = useRoute()
+const router = useRouter()
 
 // 持久化存储 Key（统一管理）
 const DRAFT_KEY = 'TOOL_SUBMIT_DRAFT'; // 表单草稿 Key
@@ -252,7 +285,6 @@ const store = useStore()
 const isAuthenticated = computed(() => store.getters.isAuthenticated)
 
 // 一、响应式数据定义
-const isAnalyzing = ref(false)
 const form = reactive({
   name: '',
   url: '',
@@ -263,6 +295,9 @@ const form = reactive({
   type: 'internal'
 })
 const isSubmitting = ref(false)
+// 编辑模式相关
+const isEditMode = ref(false)
+const editToolId = ref(null)
 // 标签相关状态
 const tagSearch = ref('')
 const selectedTags = ref(['general'])
@@ -311,6 +346,7 @@ const validateForm = () => {
   formErrors.url = !(form.url || '').trim() ? '请输入工具链接' : ''
   formErrors.category = !form.category ? '请选择分类' : ''
   formErrors.desc = !(form.desc || '').trim() ? '请输入简介' : form.desc.length > 80 ? '简介不能超过80字' : ''
+  formErrors.fullDesc = !(form.fullDesc || '').trim() ? '请输入工具使用说明' : ''
 
   // 对url进行简单格式验证
   const urlPattern = /^(https?:\/\/)[^\s/$.?#].[^\s]*$/
@@ -354,43 +390,68 @@ const onErrorLeave = (el) => {
   el.style.transform = 'translateY(-10px)'
 }
 // 5. 图标上传处理
-const handleIconUpload = (e) => {
+const handleIconUpload = async (e) => {
   const file = e.target.files[0]
   if (!file) return
+  
+  // 检查文件大小（限制5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过5MB')
+    return
+  }
+  
   // 验证文件类型
   if (!file.type.startsWith('image/')) {
     ElMessage.error('请上传图片文件')
     return
   }
-  // 读取文件并转为Base64
-  const reader = new FileReader()
-  reader.onload = (event) => {
-    form.icon = event.target.result  // 赋值给form.icon实现预览
-  }
-  reader.readAsDataURL(file)
-}
-// 6. 自动填充（未实现，后续需要调用AI + 爬虫）
-const handleAutoFill = async () => {
-  if (!(form.url || '').trim()) {
-    ElMessage.warning('请先填写链接')
-    return
-  }
-
-  isAnalyzing.value = true
+  
   try {
-    // 使用 Vuex action
-    const data = await store.dispatch('analyzeUrl', form.url)
-    form.name = data.name
-    form.desc = data.desc.substring(0, 80)
-    form.fullDesc = data.desc
-    form.icon = data.icon
-    ElMessage.success('AI 分析完成，内容已填充')
+    // 上传图片到服务器
+    const response = await HttpManager.uploadImage(file)
+    if (response && response.url) {
+      form.icon = response.url
+      ElMessage.success('图片上传成功')
+    } else {
+      ElMessage.error('图片上传失败，请重试')
+    }
   } catch (error) {
-    ElMessage.error('分析失败')
-  } finally {
-    isAnalyzing.value = false
+    console.error('图片上传失败:', error)
+    ElMessage.error('图片上传失败，请重试')
   }
 }
+
+// 图标加载错误处理
+const handleIconError = (e) => {
+  ElMessage.warning('图标加载失败，请检查URL是否正确')
+  e.target.style.display = 'none'
+}
+
+// 6. 加载工具详情（编辑模式）
+const loadToolDetail = async (toolId) => {
+  try {
+    const response = await HttpManager.getToolDetail(toolId, 'tool')
+    if (response && response.data) {
+      const tool = response.data
+      // 先回填标签（避免分类watch触发时自动添加标签）
+      selectedTags.value = tool.tags && tool.tags.length > 0 ? [...tool.tags] : ['general']
+      // 回填表单数据
+      form.name = tool.resourceName || ''
+      form.url = tool.resourceLink || ''
+      form.desc = tool.description || ''
+      form.fullDesc = tool.description_detail || ''
+      form.icon = tool.image && tool.image.length > 0 ? tool.image[0] : ''
+      // 最后设置分类（此时标签已设置，watch不会添加新标签）
+      form.category = tool.catagory || ''
+      // 回填工具类型
+      form.type = tool.type || 'external'
+    }
+  } catch (error) {
+    console.error('加载工具详情失败:', error)
+    ElMessage.error('加载工具详情失败')
+  }
+}
+
 // 7. 提交
 const submit = async () => {
   try {
@@ -403,22 +464,35 @@ const submit = async () => {
     }
     isSubmitting.value = true // 开启加载状态
 
-    // 准备数据
+    // 处理图标URL（外部URL或Base64，后端会自动本地化）
+    // 准备数据，映射前端字段到后端API期望的格式
     const submitData = {
-      ...form, // 解包获取副本，对于引用类型非常需要注意的地方（但是仅是浅拷贝，不过好在form的属性中无引用类型）
-      tags: [...selectedTags.value], // 数组也是引用类型，需要解包
-      createTime: new Date().toISOString() // 增加提交时间（可选）
+      name: form.name,
+      link: form.url, // 前端使用url，后端期望link
+      description: form.desc, // 前端使用desc，后端期望description
+      description_detail: form.fullDesc, // 前端使用fullDesc，后端期望description_detail
+      catagory: form.category, // 后端字段名是catagory（注意拼写）
+      tags: [...selectedTags.value], // 数组需要解包
+      images: form.icon ? [form.icon] : [], // 图标URL（外部URL、Base64或本地路径），后端会自动本地化
+      type: form.type || 'external' // 工具类型：internal/external
     }
 
-    // const response = await HttpManager.submitTool(submitData)
-    const response = await mockSubmitTool(submitData)
+    let response
+    if (isEditMode.value && editToolId.value) {
+      // 编辑模式：调用更新API
+      response = await HttpManager.updateTool(editToolId.value, submitData)
+      ElMessage.success(response?.message || '更新成功，等待管理员审核')
+    } else {
+      // 新建模式：调用提交API
+      response = await HttpManager.submitTool(submitData)
+      ElMessage.success(response?.message || '提交成功，等待管理员审核')
+    }
 
-    if (response.code === 200) {
+    // 后端响应格式：{ message: "...", data: {...} }
+    if (response && response.message) {
       // 清空本地草稿
       localStorage.removeItem(DRAFT_KEY);
       
-      ElMessage.success(response.message || '提交成功，等待管理员审核')
-
       // 重置表单
       Object.keys(form).forEach(key => {
         form[key] = ''
@@ -426,41 +500,26 @@ const submit = async () => {
       form.type = 'external'
       selectedTags.value = ['general']
       tagSearch.value = ''
+      
+      // 如果是编辑模式，返回提交列表
+      if (isEditMode.value) {
+        router.push('/profile/submissions')
+      }
     } else {
-      ElMessage.error(response.message || '提交失败')
+      ElMessage.error(response?.message || '操作失败')
     }
   } catch (error) {
-    ElMessage.error(error.message || '提交失败')
+    ElMessage.error(error.message || '操作失败')
   } finally {
     isSubmitting.value = false
   }
 }
-// 为方法6模拟后端API请求使用
-const mockSubmitTool = async () => {
-  // 实际上会传一个参数：submitData
-  // 返回一个Promise，模拟异步请求
-  return new Promise((resolve) => {
-    // 模拟网络延迟（1.5秒）
-    setTimeout(() => {
-      // 模拟响应数据（默认成功，也可以添加随机逻辑模拟失败）
-      // 如需模拟失败，可将code改为非200，比如：{ code: 500, message: '服务器内部错误' }
-      const mockResponse = {
-        code: 200,
-        message: '提交成功，等待管理员审核'
-      }
-
-      // 【可选】添加随机成功/失败逻辑，更贴近真实场景
-      // const isSuccess = Math.random() > 0.2; // 80%成功率
-      // const mockResponse = isSuccess
-      //   ? { code: 200, message: '提交成功，等待管理员审核' }
-      //   : { code: 500, message: '模拟提交失败：服务器忙，请稍后再试' };
-
-      resolve(mockResponse)
-    }, 1500) // 1500ms = 1.5秒延迟
-  })
-}
-// 8. 自动保存草稿到本地
+// 8. 自动保存草稿到本地（仅在编辑模式下保存，新建模式不保存草稿）
 const saveDraft = () => {
+  // 新建模式下不保存草稿
+  if (!isEditMode.value) {
+    return
+  }
   try {
     const draft = {
       form: { ...form }, // 复制form对象（避免引用）
@@ -474,47 +533,12 @@ const saveDraft = () => {
     console.error('保存表单草稿失败：', e);
   }
 };
-// 9. 加载本地草稿
-const loadDraft = () => {
-  try {
-    const draftStr = localStorage.getItem(DRAFT_KEY);
-    if (draftStr) {
-      const draft = JSON.parse(draftStr);
-      // 恢复表单数据（合并，保留现有非空值）
-      Object.assign(form, draft.form || {});
-      // 恢复选中的标签（兜底默认值）
-      selectedTags.value = draft.selectedTags?.length ? draft.selectedTags : ['general'];
-      ElMessage.info('已恢复上次未提交的表单草稿');
-    }
-  } catch (e) {
-    console.error('加载表单草稿失败：', e);
-    // 加载失败时清空无效草稿
-    localStorage.removeItem(DRAFT_KEY);
-  }
-};
+// 9. 加载本地草稿（已移除，新建模式不再加载草稿）
+// const loadDraft = () => { ... }
 
 // 四、监听器
-// 1. 工具分类自动推荐标签
-watch(() => form.category, (newCategory) => {
-  if (newCategory) {
-    // 根据分类推荐标签
-    const categoryTagsMap = {
-      软件开发: ['web', 'ide', 'editor', 'frontend', 'backend', 'open-source'],
-      项目协作: ['web', 'team', 'productivity'],
-      个人提升: ['learning', 'productivity', 'mobile'],
-      论文阅读: ['research', 'academic', 'pdf']
-    }
-
-    const recommended = categoryTagsMap[newCategory] || []
-
-    // 保留已选标签，添加推荐的标签（不重复）
-    recommended.forEach(tagId => {
-      if (selectedTags.value.indexOf(tagId) === -1 && predefinedTags.some(tag => tag.id === tagId)) {
-        selectedTags.value.push(tagId)
-      }
-    })
-  }
-})
+// 1. 工具分类自动推荐标签（已移除，不再自动推荐标签）
+// watch(() => form.category, ...) - 已移除
 //  2. 标签选择，确保至少有一个标签被选中
 watch(selectedTags, (newTags) => {
   // 确保至少有一个标签被选中
@@ -523,17 +547,41 @@ watch(selectedTags, (newTags) => {
     ElMessage.warning('请至少选择一个标签')
   }
 })
-// 3. 监听表单和标签变化，自动保存草稿（深度监听form的嵌套属性）
+// 3. 监听表单和标签变化，自动保存草稿（仅在编辑模式下保存）
 watch(
   [() => form, selectedTags], // 监听form（需包装成函数）和selectedTags
   () => {
-    saveDraft(); // 变化时触发保存
+    // 仅在编辑模式下保存草稿，新建模式不保存
+    if (isEditMode.value) {
+      saveDraft(); // 变化时触发保存
+    }
   },
   { deep: true, immediate: false } // deep: true 监听form内部属性变化
 );
 // 五、生命周期函数
 onMounted(() => {
-  loadDraft()
+  // 检查是否为编辑模式
+  const editParam = route.query.edit
+  const toolId = route.query.id
+  const type = route.query.type
+  
+  if (editParam === 'true' && toolId && type === 'tool') {
+    isEditMode.value = true
+    editToolId.value = toolId
+    // 编辑模式：加载工具详情并回填表单
+    loadToolDetail(toolId)
+  } else {
+    // 新建模式：不加载草稿，保持表单为空
+    // 清空表单，确保是全新的提交
+    Object.keys(form).forEach(key => {
+      form[key] = ''
+    })
+    form.type = 'external'
+    selectedTags.value = ['general']
+    tagSearch.value = ''
+    // 清空可能存在的草稿
+    localStorage.removeItem(DRAFT_KEY)
+  }
 })
 
 onUnmounted(() => {

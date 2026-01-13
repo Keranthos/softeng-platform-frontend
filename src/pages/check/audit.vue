@@ -9,14 +9,15 @@
                 <h1 class="text-2xl font-bold text-gray-800">审核中心</h1>
             </div>
             
-            <!-- 用户头像（与home.vue逻辑一致） -->
+            <!-- 用户头像（与工具资源界面逻辑一致） -->
             <div class="user-avatar-container relative" ref="avatarRef">
                 <!-- 头像按钮 -->
                 <div @click="showUserMenu = !showUserMenu" class="cursor-pointer relative group">
-                    <!-- 情况 1: 已登录 且 有头像图片 -->
-                    <template v-if="user.isLogin && user.avatar">
+                    <!-- 已登录用户头像 -->
+                    <template v-if="isAuthenticated && userInfo">
                         <img
-                            :src="user.avatar"
+                            :src="getUserAvatarUrl(userInfo?.avatar || '', userInfo?.nickname || '', userInfo?.username || '')"
+                            @error="handleAvatarError"
                             class="w-10 h-10 rounded-full border-2 border-white shadow-md group-hover:scale-110 transition-transform object-cover"
                             alt="User Avatar"
                         >
@@ -24,8 +25,8 @@
                         <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                     </template>
 
-                    <!-- 情况 2: 已登录 但 无头像图片 (显示 "我") -->
-                    <template v-else-if="user.isLogin">
+                    <!-- 已登录但无头像 -->
+                    <template v-else-if="isAuthenticated">
                         <div class="w-10 h-10 rounded-full border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm group-hover:scale-110 transition-transform bg-gradient-to-br from-blue-600 to-purple-600">
                             {{ userInitial }}
                         </div>
@@ -33,7 +34,7 @@
                         <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                     </template>
 
-                    <!-- 情况 3: 游客 (显示 "访") -->
+                    <!-- 游客 (显示 "访") -->
                     <template v-else>
                         <div class="w-10 h-10 rounded-full border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm group-hover:scale-110 transition-transform bg-gradient-to-br from-red-400 to-orange-400">
                             {{ userInitial }}
@@ -45,9 +46,9 @@
                 <div v-if="showUserMenu"
                     class="absolute right-0 top-14 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-pop-in overflow-hidden">
                     <!-- 已登录菜单内容 -->
-                    <template v-if="user.isLogin">
+                    <template v-if="isAuthenticated && userInfo">
                         <div class="px-4 py-3 border-b border-gray-50">
-                            <p class="text-sm font-bold text-gray-800 truncate">{{ user.nickName || '管理员' }}</p>
+                            <p class="text-sm font-bold text-gray-800 truncate">{{ userInfo?.nickname || userInfo?.username || '管理员' }}</p>
                             <p class="text-xs text-gray-400 truncate">已登录</p>
                         </div>
                         <router-link to="/profile" class="block px-4 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
@@ -148,15 +149,14 @@
                                                 {{ getItemField(item, 'title') }}
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <el-avatar 
-                                                    :size="24" 
-                                                    :src="item.uploaderAvatar" 
-                                                    class="mr-1"
+                                                <img
+                                                    :src="getUserAvatarUrl(item.uploaderAvatar || '', item.uploader || item.uploaderNickname || item.author || item.owner || '', item.username || '')"
+                                                    @error="(e) => { e.target.src = getUserAvatarUrl('', item.uploader || item.uploaderNickname || item.author || item.owner || '', item.username || '') }"
+                                                    class="w-6 h-6 rounded-full object-cover border border-gray-200"
+                                                    alt="Uploader Avatar"
                                                 >
-                                                    {{ getInitial(item.uploader || item.author || item.owner) }}
-                                                </el-avatar>
                                                 <span class="sub text-sm text-gray-500">
-                                                    上传者：{{ item.uploader || item.author || item.owner }}
+                                                    上传者：{{ item.uploader || item.uploaderNickname || item.author || item.owner || '未知' }}
                                                 </span>
                                             </div>
                                         </div>
@@ -189,7 +189,7 @@
                                                 size="mini"
                                                 type="info"
                                             >
-                                                {{ tag }}
+                                                {{ getTagName(tag) }}
                                             </el-tag>
                                             <el-tag v-if="item.tags.length > 3" size="mini" type="info">
                                                 +{{ item.tags.length - 3 }}
@@ -278,7 +278,7 @@
                                             <i class="far fa-clock mr-1"></i>
                                             提交时间：{{ formatDate(item.created_at || item.created) }}
                                         </div>
-                                        <div class="right flex gap-2">
+                                        <div class="right flex gap-2 justify-end">
                                             <el-button 
                                                 type="success" 
                                                 size="small" 
@@ -325,12 +325,16 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { HttpManager } from '../../api'
 // 本地 mock（开发时使用），若后端可用请将 useMock 设为 false
 import { getPendingReviewsMock, reviewItemMock } from '@/data/check/mockData'
-const useMock = true
+import { getUserAvatarUrl } from '@/utils/avatar'
+import { predefinedTags } from '@/data/tool/tags'
+const useMock = false // 改为false以使用真实后端API
 
 const router = useRouter()
+const store = useStore()
 
 // 一、变量定义
 const activeTab = ref('tools')
@@ -342,21 +346,33 @@ const total = ref(0) // 总条数
 // 用户菜单显示控制
 const showUserMenu = ref(false)
 const avatarRef = ref(null)
-// 用户状态
-const user = ref({
-    isLogin: true,
-    role: 'admin',
-    nickName: '',
-    avatar: ''
+
+// 用户状态（从 store 获取）
+const isAuthenticated = computed(() => {
+  try {
+    return store.getters.isAuthenticated || false
+  } catch (e) {
+    return false
+  }
+})
+const userInfo = computed(() => {
+  try {
+    const info = store.getters.userInfo
+    // 确保返回一个对象，即使 store 返回 null 或 undefined
+    return info && typeof info === 'object' ? info : null
+  } catch (e) {
+    return null
+  }
 })
 
 // 二、计算属性
 // 1. 用户头像初始化
 const userInitial = computed(() => {
     // 游客显示 '访'
-    if (!user.value.isLogin) return '访'
-    // 已登录（但没图片的情况）显示 '我'
-    return '我'
+    if (!isAuthenticated.value) return '访'
+    // 已登录显示昵称或用户名的首字母
+    const name = userInfo.value?.nickname || userInfo.value?.username || '我'
+    return name[0] || '我'
 })
 
 // 三、方法
@@ -384,10 +400,26 @@ const getItemField = (item, field) => {
         return item[projectFields[field] || field] || item[field] || ''
     }
 }
-// 5. 获取首字母（用于头像）
-const getInitial = (name) => {
-    if (!name) return '?'
-    return name.charAt(0).toUpperCase()
+// 5. 将标签ID转换为中文名称
+const getTagName = (tagId) => {
+    const tag = predefinedTags.find(t => t.id === tagId)
+    return tag ? tag.name : tagId
+}
+// 7. 处理头像加载错误
+const handleAvatarError = (event) => {
+    // 如果图片加载失败，使用默认头像
+    if (userInfo.value) {
+        const defaultAvatar = getUserAvatarUrl('', userInfo.value?.nickname || '', userInfo.value?.username || '')
+        if (event.target.src !== defaultAvatar) {
+            event.target.src = defaultAvatar
+        }
+    } else {
+        // 如果没有用户信息，使用默认的"我"头像
+        const defaultAvatar = getUserAvatarUrl('', '我', '')
+        if (event.target.src !== defaultAvatar) {
+            event.target.src = defaultAvatar
+        }
+    }
 }
 // 6. 规范化后端响应数据
 function normalizeResponse(res) {
@@ -454,8 +486,31 @@ function formatDate(t) {
 async function review(item, action) {
     const actionText = action === 'approve' ? '通过' : '拒绝'
     const actionIcon = action === 'approve' ? 'success' : 'warning'
+    let rejectReason = ''
 
     try {
+        // 如果是拒绝操作，需要输入拒绝原因
+        if (action === 'reject') {
+            const { value } = await ElMessageBox.prompt(
+                `请输入拒绝【${getItemField(item, 'title')}】的原因：`,
+                '拒绝审核',
+                {
+                    confirmButtonText: '确认拒绝',
+                    cancelButtonText: '取消',
+                    type: 'warning',
+                    inputType: 'textarea',
+                    inputPlaceholder: '请输入拒绝原因（必填）',
+                    inputValidator: (value) => {
+                        if (!value || value.trim() === '') {
+                            return '拒绝原因不能为空'
+                        }
+                        return true
+                    }
+                }
+            )
+            rejectReason = value || ''
+        } else {
+            // 通过操作，直接确认
         await ElMessageBox.confirm(
             `确认要${actionText}【${getItemField(item, 'title')}】吗？`,
             '审核确认',
@@ -467,8 +522,13 @@ async function review(item, action) {
                 customClass: 'audit-confirm-dialog'
             }
         )
+        }
 
-        const params = { action, resourceType: activeTab.value }
+        const params = { 
+            action, 
+            resourceType: activeTab.value,
+            reject_reason: rejectReason
+        }
 
         if (useMock) {
             await reviewItemMock(item.id || item._id || item.resourceId, params)
@@ -492,7 +552,7 @@ async function review(item, action) {
         }
 
     } catch (e) {
-        if (e !== 'cancel') {
+        if (e !== 'cancel' && e !== 'close') {
             console.error(e)
             ElMessage.error('操作失败')
         }
@@ -500,9 +560,10 @@ async function review(item, action) {
 }
 // 11. 处理用户操作
 function handleLogout() {
-    user.value.isLogin = false
+    store.dispatch('logout')
     showUserMenu.value = false
     ElMessage.success('已退出登录')
+    router.push({ name: 'Login' })
 }
 // 12. 关闭下拉菜单
 const closeDropdowns = (e) => {

@@ -152,6 +152,7 @@ import { ref, onMounted, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useStore } from 'vuex'  // 添加 Vuex
 import { ElMessage } from 'element-plus'
+import { HttpManager } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -172,7 +173,7 @@ onMounted(() => {
   // 检查用户是否登录
   if (!isAuthenticated.value) {
     ElMessage.warning('请先登录以上传资料')
-    router.push('/login')
+    router.push({ name: 'Login' })
     return
   }
 
@@ -193,7 +194,7 @@ const goBack = () => {
   router.back()
 }
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (!isAuthenticated.value) {
     ElMessage.error('请先登录')
     return
@@ -204,18 +205,51 @@ const handleSubmit = () => {
     return
   }
 
+  if (!formData.courseId) {
+    ElMessage.error('缺少课程ID')
+    return
+  }
+
   isSubmitting.value = true
-  setTimeout(() => {
-    isSubmitting.value = false
-    ElMessage.success({
-      message: '提交成功！审核通过后将展示在列表页',
-      type: 'success',
-      duration: 2000
+
+  try {
+    // 准备提交数据，映射到后端API期望的格式
+    // 根据表单的 type 字段确定 resourceType: 'doc', 'video', 'tool'
+    const resourceType = formData.type || 'doc'
+    
+    const submitData = {
+      resource: formData.link, // 资源链接
+      description: formData.description || '', // 描述
+      tags: [] // 标签（如果需要可以从表单获取）
+    }
+
+    // 调用课程资源上传接口
+    // 注意：后端期望 resourceType 作为路径参数或查询参数
+    const response = await HttpManager.addCourseResource(formData.courseId, {
+      ...submitData,
+      resourceType: resourceType
     })
+
+    if (response && (response.message || response.success)) {
+      ElMessage.success(response.message || '提交成功！审核通过后将展示在列表页')
+      
+      // 重置表单
+      formData.link = ''
+      formData.description = ''
+      
+      // 延迟返回
     setTimeout(() => {
       goBack()
     }, 1000)
-  }, 1000)
+    } else {
+      ElMessage.error('提交失败，请稍后重试')
+    }
+  } catch (error) {
+    console.error('提交课程资源失败:', error)
+    ElMessage.error(error.response?.data?.message || error.message || '提交失败，请稍后重试')
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 

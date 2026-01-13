@@ -110,7 +110,17 @@ const store = useStore()  // 替换 useToolsStore
 const router = useRouter()
 const route = useRoute()
 
-const categories = ['软件开发', '项目协作', '个人提升', '论文阅读']
+// 使用 store 中的 categories，确保侧边栏顺序与界面实际显示顺序一致
+const categories = computed(() => {
+  // 如果 store 中有 categories，使用 store 的顺序
+  // 否则使用默认顺序（从数据库中常见的顺序：软件开发、论文阅读、个人提升、项目协作）
+  const storeCategories = store.state.tools.categories
+  if (storeCategories && storeCategories.length > 0) {
+    return storeCategories
+  }
+  // 默认顺序（按数据库中常见的顺序）
+  return ['软件开发', '论文阅读', '个人提升', '项目协作']
+})
 const disableToolSubmit = computed(() => store.state.tools.disableToolSubmit)
 
 // 一、变量声明

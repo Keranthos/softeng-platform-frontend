@@ -17,12 +17,84 @@
     <div class="flex gap-6 items-start">
       <div class="flex-1 bg-white/80 backdrop-blur-md rounded-3xl p-8 shadow-lg border border-white/60">
         <!-- 左侧表单 -->
+        <!-- 项目封面 -->
         <div class="mb-6">
           <label class="block text-sm font-bold text-gray-700 mb-2">项目封面:</label>
+          <div class="flex gap-4 items-start">
           <div class="w-24 h-24 bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors border-2 border-dashed border-gray-300 group overflow-hidden relative">
-            <img v-if="form.coverImage" :src="form.coverImage" alt='' class="w-full h-full object-cover">
+              <img v-if="form.coverImage" :src="getImageUrl(form.coverImage)" @error="handleCoverError" alt='封面预览' class="w-full h-full object-cover">
             <i v-else class="fas fa-plus text-3xl text-gray-400 group-hover:text-gray-600"></i>
-            <input type="file" class="absolute inset-0 opacity-0 cursor-pointer">
+              <input type="file" @change="handleCoverUpload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" ref="coverFileInput">
+            </div>
+            <div class="flex-1 space-y-2">
+              <div>
+                <label class="text-xs text-gray-500 mb-1 block">封面URL（推荐）</label>
+                <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                  <i class="fas fa-link text-gray-400 text-xs"></i>
+                  <input v-model="form.coverImage" type="text" placeholder="https://example.com/cover.png"
+                    class="bg-transparent border-none outline-none flex-1 text-gray-700 text-sm">
+                </div>
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 mb-1 block">或上传本地图片</label>
+                <button @click="$refs.coverFileInput.click()" type="button"
+                  class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2">
+                  <i class="fas fa-upload"></i>
+                  选择封面图片
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 项目图片（截图） -->
+        <div class="mb-6">
+          <label class="block text-sm font-bold text-gray-700 mb-2">项目截图（1-5张）:</label>
+          <div class="space-y-3">
+            <!-- 图片预览列表 -->
+            <div v-if="form.images.length > 0" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div v-for="(image, index) in form.images" :key="index" class="relative group">
+                <img :src="getImageUrl(image)" @error="handleImageError" 
+                     class="w-full h-32 object-cover rounded-lg border border-gray-200">
+                <button @click="removeImage(index)" 
+                        class="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+            
+            <!-- 添加图片按钮 -->
+            <div v-if="form.images.length < 5" class="flex gap-3">
+              <div class="flex-1">
+                <label class="text-xs text-gray-500 mb-1 block">图片URL</label>
+                <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                  <i class="fas fa-link text-gray-400 text-xs"></i>
+                  <input v-model="imageUrlInput" @keyup.enter="addImageFromUrl" type="text" 
+                         placeholder="https://example.com/image.png"
+                         class="bg-transparent border-none outline-none flex-1 text-gray-700 text-sm">
+                </div>
+              </div>
+              <div class="flex items-end">
+                <button @click="addImageFromUrl" type="button"
+                        class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors">
+                  添加
+                </button>
+              </div>
+            </div>
+            
+            <!-- 上传本地图片 -->
+            <div v-if="form.images.length < 5">
+              <label class="text-xs text-gray-500 mb-1 block">或上传本地图片</label>
+              <input type="file" @change="handleImageUpload" accept="image/*" 
+                     class="hidden" ref="imageFileInput" multiple>
+              <button @click="$refs.imageFileInput.click()" type="button"
+                      class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-upload"></i>
+                选择图片文件（最多{{ 5 - form.images.length }}张）
+              </button>
+            </div>
+            
+            <p class="text-xs text-gray-400">支持外部链接或本地上传，最多5张图片</p>
           </div>
         </div>
         <div class="mb-4">
@@ -228,10 +300,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useStore } from 'vuex'  // 修改：使用 Vuex
 import { ElMessage } from 'element-plus'
 import { projectTags } from '@/data/project/projectTags'
+import { HttpManager } from '@/api'
+import { getImageUrl } from '@/utils/image'
 
 const store = useStore()
 const isAuthenticated = computed(() => store.getters.isLoggedIn)
@@ -248,12 +322,14 @@ const form = reactive({
   category: '',
   license: 'MIT',
   status: 'active',
-  technologies: []
+  technologies: [],
+  images: [] // 项目截图数组
 })
 const isSubmitting = ref(false)
 const tagSearch = ref('')
 const selectedTags = ref([])
 const techInput = ref('')
+const imageUrlInput = ref('') // 图片URL输入框
 
 // 计算属性
 const filteredTags = computed(() => {
@@ -298,6 +374,142 @@ const addTechnology = () => {
 
 const removeTechnology = (index) => {
   form.technologies.splice(index, 1)
+}
+
+// 处理封面图上传
+const handleCoverUpload = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  
+  // 检查文件大小（限制5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过5MB')
+    return
+  }
+  
+  // 验证文件类型
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请上传图片文件')
+    return
+  }
+  
+  try {
+    // 上传图片到服务器
+    const response = await HttpManager.uploadImage(file)
+    if (response && response.url) {
+      form.coverImage = response.url
+      ElMessage.success('封面图上传成功')
+    } else {
+      ElMessage.error('封面图上传失败，请重试')
+    }
+  } catch (error) {
+    console.error('封面图上传失败:', error)
+    ElMessage.error('封面图上传失败，请重试')
+  }
+}
+
+// 处理封面图加载错误
+const handleCoverError = (e) => {
+  e.target.style.display = 'none'
+}
+
+// 从URL添加图片
+const addImageFromUrl = async () => {
+  const url = (imageUrlInput.value || '').trim()
+  if (!url) {
+    ElMessage.warning('请输入图片URL')
+    return
+  }
+  
+  if (form.images.length >= 5) {
+    ElMessage.warning('最多只能添加5张图片')
+    return
+  }
+  
+  if (form.images.includes(url)) {
+    ElMessage.warning('该图片已添加')
+    return
+  }
+  
+  try {
+    // 如果是外部URL，先处理本地化
+    const processedUrl = await HttpManager.processImageURL(url)
+    if (processedUrl && processedUrl.url) {
+      form.images.push(processedUrl.url)
+      imageUrlInput.value = ''
+      ElMessage.success('图片添加成功')
+    } else {
+      // 如果处理失败，直接使用原URL
+      form.images.push(url)
+      imageUrlInput.value = ''
+      ElMessage.success('图片添加成功')
+    }
+  } catch (error) {
+    console.error('处理图片URL失败:', error)
+    // 如果处理失败，直接使用原URL
+    form.images.push(url)
+    imageUrlInput.value = ''
+    ElMessage.success('图片添加成功')
+  }
+}
+
+// 处理图片上传
+const handleImageUpload = async (e) => {
+  const files = Array.from(e.target.files || [])
+  if (files.length === 0) return
+  
+  // 检查数量限制
+  const remainingSlots = 5 - form.images.length
+  if (files.length > remainingSlots) {
+    ElMessage.warning(`最多只能添加${remainingSlots}张图片`)
+    files.splice(remainingSlots)
+  }
+  
+  // 上传所有图片
+  for (const file of files) {
+    // 检查文件大小（限制5MB）
+    if (file.size > 5 * 1024 * 1024) {
+      ElMessage.error(`图片 ${file.name} 大小不能超过5MB`)
+      continue
+    }
+    
+    // 验证文件类型
+    if (!file.type.startsWith('image/')) {
+      ElMessage.error(`文件 ${file.name} 不是图片格式`)
+      continue
+    }
+    
+    try {
+      // 上传图片到服务器
+      const response = await HttpManager.uploadImage(file)
+      if (response && response.url) {
+        form.images.push(response.url)
+      } else {
+        ElMessage.error(`图片 ${file.name} 上传失败`)
+      }
+    } catch (error) {
+      console.error(`图片 ${file.name} 上传失败:`, error)
+      ElMessage.error(`图片 ${file.name} 上传失败`)
+    }
+  }
+  
+  if (files.length > 0) {
+    ElMessage.success('图片上传完成')
+  }
+  
+  // 清空文件选择
+  e.target.value = ''
+}
+
+// 移除图片
+const removeImage = (index) => {
+  form.images.splice(index, 1)
+  ElMessage.success('图片已移除')
+}
+
+// 处理图片加载错误
+const handleImageError = (e) => {
+  e.target.style.display = 'none'
 }
 
 const validateForm = () => {
@@ -345,25 +557,51 @@ const submit = async () => {
     }
     isSubmitting.value = true
 
-    // const submitData = {
-    //   ...form,
-    //   tags: [...selectedTags.value]
-    // }
-
-    // 模拟提交
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    ElMessage.success('提交成功，等待管理员审核')
-
-    // 重置表单
-    Object.keys(form).forEach(key => {
-      if (key === 'license') form[key] = 'MIT'
-      else if (key === 'status') form[key] = 'active'
-      else if (key === 'technologies') form[key] = []
-      else form[key] = ''
+    // 准备数据，映射前端字段到后端API期望的格式
+    // 合并封面图和项目截图：封面图作为第一张，其他截图跟在后面
+    const allImages = []
+    if (form.coverImage) {
+      allImages.push(form.coverImage)
+    }
+    // 添加其他截图（避免重复添加封面图）
+    form.images.forEach(img => {
+      if (img !== form.coverImage && !allImages.includes(img)) {
+        allImages.push(img)
+      }
     })
-    selectedTags.value = []
-    tagSearch.value = ''
-    techInput.value = ''
+    
+    const submitData = {
+      name: form.name,
+      description: form.description,
+      detail: form.details, // 前端使用details，后端期望detail
+      github: form.githubUrl, // 前端使用githubUrl，后端期望github
+      techStack: [...form.technologies], // 技术栈数组
+      catagory: form.category, // 后端字段名是catagory（注意拼写）
+      images: allImages // 项目图片数组（封面图 + 截图，最多5张）
+      // 注意：license 和 status 字段后端API暂时不需要
+    }
+
+    const response = await HttpManager.submitProject(submitData)
+
+    // 后端响应格式：{ message: "...", data: {...} }
+    if (response && response.message) {
+      ElMessage.success(response.message || '提交成功，等待管理员审核')
+
+      // 重置表单
+      Object.keys(form).forEach(key => {
+        if (key === 'license') form[key] = 'MIT'
+        else if (key === 'status') form[key] = 'active'
+        else if (key === 'technologies') form[key] = []
+        else if (key === 'images') form[key] = []
+        else form[key] = ''
+      })
+      selectedTags.value = []
+      tagSearch.value = ''
+      techInput.value = ''
+      imageUrlInput.value = ''
+    } else {
+      ElMessage.error(response?.message || '提交失败')
+    }
   } catch (error) {
     ElMessage.error(error.message || '提交失败')
   } finally {
@@ -372,26 +610,8 @@ const submit = async () => {
 }
 
 // 监听器
-watch(() => form.category, (newCategory) => {
-  if (newCategory) {
-    const categoryTagsMap = {
-      前端项目: ['frontend', 'vue', 'react', 'javascript', 'html', 'css'],
-      后端项目: ['backend', 'nodejs', 'python', 'java', 'spring', 'database'],
-      全栈项目: ['fullstack', 'vue', 'nodejs', 'mongodb', 'express'],
-      移动应用: ['mobile', 'flutter', 'react-native', 'android', 'ios'],
-      桌面应用: ['desktop', 'electron', 'csharp', 'java', 'python'],
-      开源工具: ['open-source', 'tool', 'cli', 'library', 'framework']
-    }
-
-    const recommended = categoryTagsMap[newCategory] || []
-
-    recommended.forEach(tagId => {
-      if (selectedTags.value.indexOf(tagId) === -1 && projectTags.some(tag => tag.id === tagId)) {
-        selectedTags.value.push(tagId)
-      }
-    })
-  }
-})
+// 标签自动推荐功能已移除，用户需要手动选择标签
+// watch(() => form.category, ...) - 已移除
 </script>
 
 <style lang="scss" scoped>

@@ -3,6 +3,7 @@ import ToolsLayout from '@/pages/tool/ToolsLayout.vue'
 import ToolsList from '@/pages/tool/ToolsList.vue'
 import ToolSubmit from '@/pages/tool/ToolSubmit.vue'
 import { createRouter, createWebHistory, RouterView } from 'vue-router'
+import store from '@/store'
 
 const constantRoutes = [
   {
@@ -66,29 +67,23 @@ const constantRoutes = [
   },
   {
     path: '/',
-    component: RouterView,
-    children: [
-      {
-        path: '',
-        name: 'Login',
-        component: () => import('@/pages/log/login.vue')
-      },
-      {
-        path: 'register',
-        name: 'register',
-        component: () => import('@/pages/log/register.vue')
-      },
-      {
-        path: 'forgot-password',
-        name: 'forget',
-        component: () => import('@/pages/log/forget_pass.vue')
-      },
-      {
-        path: 'logout',
-        name: 'logout',
-        component: () => import('@/pages/log/logout.vue')
-      }
-    ]
+    name: 'Login',
+    component: () => import('@/pages/log/login.vue')
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/pages/log/register.vue')
+  },
+  {
+    path: '/forgot-password',
+    name: 'forget',
+    component: () => import('@/pages/log/forget_pass.vue')
+  },
+  {
+    path: '/logout',
+    name: 'logout',
+    component: () => import('@/pages/log/logout.vue')
   },
   // 工具页面导航
   {
@@ -163,8 +158,14 @@ const constantRoutes = [
         component: () => import('@/pages/project/ProjectSubmit.vue')
       }
     ]
-  }
-  ,
+  },
+  // 搜索页面路由
+  {
+    path: '/search',
+    name: 'Search',
+    component: () => import('@/pages/SearchPage.vue'),
+    meta: { title: '搜索结果' }
+  },
   // 审核页面路由
   {
     path: '/check',
@@ -197,6 +198,46 @@ const router = createRouter({
     return { top: 0, left: 0, behavior: 'smooth' }
   },
   routes: constantRoutes
+})
+
+// 路由守卫：检查需要登录的路由
+router.beforeEach(async (to, from, next) => {
+  const token = localStorage.getItem('token')
+  
+  // 登录相关页面（登录、注册、忘记密码），允许访问（不验证 token）
+  // 这样即使有旧的 token，用户也可以重新登录
+  if (to.path === '/' || to.path === '/register' || to.path === '/forgot-password') {
+    next()
+    return
+  }
+  
+  // 如果有 token 且用户信息未加载，先尝试初始化用户信息
+  if (token && (!store.state.user.id && !store.state.user.username)) {
+    try {
+      await store.dispatch('initAuth')
+    } catch (error) {
+      console.warn('初始化用户信息失败:', error)
+      // 初始化失败不影响路由跳转，继续执行
+    }
+  }
+  
+  // 检查路由是否需要认证
+  if (to.matched.some(record => record.meta.requiresAuth)) {
+    // 检查是否有token
+    if (!token) {
+      // 未登录，重定向到登录页
+      next({
+        path: '/',
+        query: { redirect: to.fullPath } // 保存原始路径，登录后可以跳转回来
+      })
+    } else {
+      // 已登录，允许访问
+      next()
+    }
+  } else {
+    // 不需要认证的路由，直接放行（如 /home, /tools 等，允许游客访问）
+    next()
+  }
 })
 
 export default router

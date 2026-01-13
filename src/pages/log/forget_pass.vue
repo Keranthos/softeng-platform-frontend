@@ -172,7 +172,7 @@ const submitForm = () => {
       if (result.message?.includes('成功') || result.code === 1) {
         ElMessage.success('密码重置成功！请重新登录')
         setTimeout(() => {
-          router.push('/login')
+          router.push({ name: 'Login' })
         }, 1500)
       } else {
         ElMessage.error(result.message || '重置失败，请检查信息')

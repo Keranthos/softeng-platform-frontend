@@ -152,9 +152,10 @@
           <div @click="showUserMenu = !showUserMenu" class="cursor-pointer relative group">
 
             <!-- 情况 1: 已登录 且 有头像图片 -->
-            <template v-if="isAuthenticated && userInfo?.avatar">
+            <template v-if="isAuthenticated && userInfo">
               <img
-                :src="userInfo.avatar"
+                :src="getUserAvatarUrl(userInfo.avatar, userInfo.nickname, userInfo.username)"
+                @error="handleAvatarError"
                 class="w-10 h-10 rounded-full border-2 border-white shadow-md group-hover:scale-110 transition-transform object-cover"
                 alt="User Avatar"
               >
@@ -204,11 +205,11 @@
               <div class="px-4 py-3 text-xs text-gray-400 bg-gray-50 border-b border-gray-100 cursor-default">
                 当前身份：游客
               </div>
-              <router-link to="/profile" class="block px-4 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                <i class="fas fa-user mr-2 text-blue-500"></i>个人中心
-              </router-link>
+              <div class="block px-4 py-3 text-gray-400 cursor-not-allowed opacity-60">
+                <i class="fas fa-user mr-2"></i>个人中心（请先登录）
+              </div>
               <div class="h-px bg-gray-100 my-1"></div>
-              <div @click="goToLogin" class="block px-4 py-3 text-blue-600 hover:bg-blue-50 font-medium cursor-pointer transition-colors">
+              <div @click.stop="goToLogin" class="block px-4 py-3 text-blue-600 hover:bg-blue-50 font-medium cursor-pointer transition-colors">
                 <i class="fas fa-sign-in-alt mr-2"></i>返回登录
               </div>
             </template>
@@ -216,9 +217,13 @@
         </div>
       </div>
     </header>
-    <div v-if="!toolsList.length" class="text-center py-20 text-gray-400">
+    <div v-if="toolsLoading" class="text-center py-20 text-gray-400">
       <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
       <p>资源加载中...</p>
+    </div>
+    <div v-else-if="!toolsList.length" class="text-center py-20 text-gray-400">
+      <i class="fas fa-inbox text-3xl mb-4"></i>
+      <p>暂无工具资源</p>
     </div>
     <div v-else class="space-y-12 pb-20">
       <section v-for="category in filteredCategories" :key="category" :id="`section-${category}`" class="scroll-mt-32">
@@ -231,31 +236,35 @@
         </div>
         <!-- 修改网格容器 -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div v-for="tool in getToolsByCategory(category)" :key="tool.id" class="tool-card-container relative"
-            @mouseenter="handleMouseEnter(tool.id)" @mouseleave="handleMouseLeave(tool.id)">
+          <div v-for="tool in getToolsByCategory(category)" :key="tool.resourceId || tool.id" class="tool-card-container relative"
+            @mouseenter="handleMouseEnter(tool.resourceId || tool.id)" @mouseleave="handleMouseLeave(tool.resourceId || tool.id)">
             <!-- 卡片内容 -->
             <div
               class="tool-card group relative bg-white/60 hover:bg-white backdrop-blur-sm rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 border border-white/50 cursor-pointer"
-              @click="goToDetail(tool.id)">
+              @click="goToDetail(tool.resourceId || tool.id)">
               <div class="flex items-center gap-4 mb-3">
-                <img :src="tool.logo" class="w-12 h-12 rounded-xl object-cover shadow-sm bg-white" alt="logo">
+                <img 
+                  :src="getToolImage(tool)" 
+                  @error="handleImageError($event, tool)"
+                  class="w-12 h-12 rounded-xl object-cover shadow-sm bg-white" 
+                  alt="logo">
                 <div class="overflow-hidden">
-                  <h3 class="font-bold text-gray-800 truncate group-hover:text-blue-600 transition-colors">{{ tool.name
+                  <h3 class="font-bold text-gray-800 truncate group-hover:text-blue-600 transition-colors">{{ tool.resourceName || tool.name || '未命名工具'
                     }}</h3>
                   <div class="flex items-center gap-2 text-xs text-gray-400 mt-1">
-                    <span><i class="far fa-eye"></i> {{ tool.views }}</span>
-                    <span><i class="far fa-star"></i> {{ tool.stars }}</span>
+                    <span><i class="far fa-eye"></i> {{ tool.views || 0 }}</span>
+                    <span><i class="far fa-star"></i> {{ tool.collections || tool.stars || 0 }}</span>
                   </div>
                 </div>
               </div>
               <p class="text-sm text-gray-500 leading-relaxed line-clamp-2 h-10">
-                {{ tool.desc }}
+                {{ tool.description || tool.desc || '暂无描述' }}
               </p>
             </div>
             <!-- 提示框 -->
-            <div v-if="activeToolId === tool.id" class="tooltip-absolute animate-pop-in">
+            <div v-if="activeToolId === (tool.resourceId || tool.id)" class="tooltip-absolute animate-pop-in">
               <div class="absolute -top-1 left-8 w-2 h-2 bg-gray-800 rotate-45"></div>
-              {{ tool.fullDesc }}
+              {{ tool.descriptionDetail || tool.description || tool.fullDesc || tool.desc || '暂无详细描述' }}
             </div>
           </div>
         </div>
@@ -270,6 +279,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'  // 替换 Pinia 导入
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { getUserAvatarUrl } from '@/utils/avatar'
+import { getImageUrl } from '@/utils/image'
 
 const store = useStore()  // 替换 useToolsStore
 const router = useRouter()
@@ -278,6 +289,7 @@ const route = useRoute()
 // 使用storeToRefs来保持响应式
 const toolsList = computed(() => store.state.tools.toolsList)
 const categories = computed(() => store.state.tools.categories)
+const toolsLoading = computed(() => store.getters.toolsLoading)
 const userInfo = computed(() => store.state.user)
 const activeFilters = computed(() => store.state.tools.activeFilters)
 const searchResults = computed(() => store.state.tools.searchResults)
@@ -352,7 +364,8 @@ const filteredTagGroups = computed(() => {
 const filteredCategories = computed(() => {
   // 如果有搜索结果，只显示包含搜索结果的分类
   if (hasSearched.value && searchResults.value.length > 0) {
-    const cats = [...new Set(searchResults.value.map(t => t.category))]
+    // 兼容 category 和 catagory 两种拼写
+    const cats = [...new Set(searchResults.value.map(t => t.category || t.catagory).filter(Boolean))]
     return categories.value?.filter(cat => cats.includes(cat))
   }
   return categories.value
@@ -419,31 +432,41 @@ const getToolsByCategory = (cat) => {
   let list = []
   if (hasSearched.value) { // 是否进行搜索
     if (searchResults.value.length > 0) { // 有搜索结果
-      list = searchResults.value?.filter(t => t.category === cat)
+      // 兼容 category 和 catagory 两种拼写
+      list = searchResults.value?.filter(t => (t.category || t.catagory) === cat)
       return filterToolList(list)
     } else { // 无搜索结果，返回空list
       return list
     }
   }
-  list = toolsList.value?.filter(t => t.category === cat)
+  // 兼容 category 和 catagory 两种拼写
+  list = toolsList.value?.filter(t => (t.category || t.catagory) === cat)
   return filterToolList(list) // 最后还需要对工具列表使用筛选功能
 }
 // 8. 筛选逻辑，分别作用于各个category下
 const filterToolList = (list) => {
   // 排序
   if (activeFilters.value.sort === '最多浏览') {
-    list.sort((a, b) => b.views - a.views)
+    list.sort((a, b) => (b.views || 0) - (a.views || 0))
   } else if (activeFilters.value.sort === '最多收藏') {
-    list.sort((a, b) => b.stars - a.stars)
+    // 兼容 loves 和 stars 两种字段名
+    list.sort((a, b) => (b.collections || b.stars || 0) - (a.collections || a.stars || 0))
   }
   // 标签
   if (activeFilters.value.tags.length > 0) {
-    list = list?.filter(item => activeFilters.value.tags.every(tag => item.tags.includes(tag)))
+    list = list?.filter(item => {
+      const itemTags = item.tags || []
+      return activeFilters.value.tags.every(tag => itemTags.includes(tag))
+    })
   }
   return list
 }
 // 9. 访问详情页
 const goToDetail = async (id) => {
+  if (!id) {
+    console.error('工具ID为空，无法跳转')
+    return
+  }
   if (tooltipTimers.value[id]) {
     clearTimeout(tooltipTimers.value[id])
     tooltipTimers.value[id] = null
@@ -451,7 +474,7 @@ const goToDetail = async (id) => {
   activeToolId.value = null
   router.push({
     name: 'ToolDetail',
-    params: { id }
+    params: { id: String(id) }
   })
   // 使用 Vuex action
   // await store.dispatch('addToolView', id)
@@ -459,7 +482,13 @@ const goToDetail = async (id) => {
 // ***********************************需要修改：将当前页面的路径当作参数传递，使得登录成功后可以跳转回当前页面
 // 10. 进入登录页面
 const goToLogin = () => {
-  router.push({ name: 'Login' })
+  // 先关闭下拉菜单
+  showUserMenu.value = false
+  // 然后跳转到登录页，并保存当前路径以便登录后返回
+  router.push({
+    name: 'Login',
+    query: { redirect: router.currentRoute.value.fullPath }
+  })
 }
 // 11. 退出登录
 const handleLogout = async () => {
@@ -489,6 +518,111 @@ const toggleTag = (tagId) => {
   // 使用 Vuex action
   store.dispatch('toggleTag', { type: 'tools', tag: tagId })
 }
+
+// 获取工具图片URL
+// 生成基于工具名称的默认 SVG 图标
+const generateDefaultToolIcon = (toolName) => {
+  const name = toolName || '工'
+  const initial = name.charAt(0)
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8']
+  const colorIndex = initial.charCodeAt(0) % colors.length
+  const bgColor = colors[colorIndex]
+  
+  const svg = `
+    <svg width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+      <rect width="48" height="48" fill="${bgColor}" rx="12"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle" dominant-baseline="central" font-weight="bold">${initial}</text>
+    </svg>
+  `.trim()
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
+}
+
+const getToolImage = (tool) => {
+  const toolName = tool?.resourceName || tool?.name || '工具'
+  
+  // 优先使用 image 数组的第一个元素
+  if (tool.image && Array.isArray(tool.image) && tool.image.length > 0 && tool.image[0]) {
+    const imageUrl = tool.image[0]
+    // 如果 URL 是 simpleicons CDN 或其他可能失败的 URL，直接使用默认图标
+    if (imageUrl && (
+      imageUrl.includes('cdn.simpleicons.org') ||
+      imageUrl.includes('endnote.com') ||
+      imageUrl.includes('150?text=') ||
+      (imageUrl.includes('placehold.co') && !imageUrl.includes('https://'))
+    )) {
+      return generateDefaultToolIcon(toolName)
+    }
+    // 使用 getImageUrl 处理相对路径，确保正确指向后端服务器
+    if (imageUrl) {
+      const processedUrl = getImageUrl(imageUrl)
+      if (processedUrl) {
+        return processedUrl
+      }
+    }
+    // 其他情况使用默认图标
+    return generateDefaultToolIcon(toolName)
+  }
+  // 其次使用 logo 字段
+  if (tool.logo) {
+    const logoUrl = tool.logo
+    // 同样检查 logo URL 是否可能失败
+    if (logoUrl && (
+      logoUrl.includes('cdn.simpleicons.org') ||
+      logoUrl.includes('endnote.com') ||
+      logoUrl.includes('150?text=') ||
+      (logoUrl.includes('placehold.co') && !logoUrl.includes('https://'))
+    )) {
+      return generateDefaultToolIcon(toolName)
+    }
+    // 使用 getImageUrl 处理相对路径
+    if (logoUrl) {
+      const processedUrl = getImageUrl(logoUrl)
+      if (processedUrl) {
+        return processedUrl
+      }
+    }
+    // 其他情况使用默认图标
+    return generateDefaultToolIcon(toolName)
+  }
+  // 默认生成 SVG 图标
+  return generateDefaultToolIcon(toolName)
+}
+
+// 处理图片加载错误（作为最后的备用方案）
+const handleImageError = (event, tool) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标（SVG），不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml')) {
+    return
+  }
+  
+  // 使用工具名称生成默认图标
+  const toolName = tool?.resourceName || tool?.name || '工具'
+  const defaultIcon = generateDefaultToolIcon(toolName)
+  
+  if (event.target.src !== defaultIcon) {
+    event.target.src = defaultIcon
+  }
+}
+
+// 处理用户头像加载错误
+const handleAvatarError = (event) => {
+  const currentSrc = event.target.src
+  
+  // 如果已经是默认图标（SVG），不再重试，避免无限循环
+  if (currentSrc.startsWith('data:image/svg+xml')) {
+    return
+  }
+  
+  // 使用用户信息生成默认头像
+  const defaultAvatar = getUserAvatarUrl('', userInfo.value?.nickname, userInfo.value?.username)
+  
+  if (event.target.src !== defaultAvatar) {
+    event.target.src = defaultAvatar
+  }
+}
+
 // 12. 辅助：关闭下拉菜单
 const filterRef = ref(null)
 const avatarRef = ref(null)
@@ -511,13 +645,23 @@ watch(() => route.query, (newQuery) => {
 }, { immediate: true })
 
 // 五、生命周期函数
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('click', closeDropdowns)
   console.log('工具列表页面已挂载')
 
   // 没有数据时需要加载数据
   if (toolsList.value.length === 0) {
-    store.dispatch('fetchTools')
+    // 优先尝试从后端获取，如果失败则使用mock数据
+    try {
+      await store.dispatch('fetchTools', { useMock: false })
+      // 如果后端返回但数据为空，使用mock数据
+      if (toolsList.value.length === 0) {
+        await store.dispatch('fetchTools', { useMock: true })
+      }
+    } catch (error) {
+      console.error('获取工具列表失败，使用mock数据:', error)
+      await store.dispatch('fetchTools', { useMock: true })
+    }
   }
 
   // 启用工具提交按钮
