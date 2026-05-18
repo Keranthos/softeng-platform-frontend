@@ -4,6 +4,7 @@ import { HttpManager } from '@/api'
 import { mockProjects } from '@/data/project/mockData'
 import { mockTools } from '@/data/tool/mockData'
 import { predefinedTags } from '@/data/tool/tags'
+import { detectSearchIntent } from '@/utils/smartSearch'
 
 export default createStore({
   state: {
@@ -96,11 +97,18 @@ export default createStore({
         { name: '安全中心', url: '/admin/review/security', icon: 'https://fakeicon.com/shield.svg', desc: '系统安全设置' }
       ],
       sidebarItems: [
-        { id: 'common', name: '常用', icon: 'fa-star' },
-        { id: 'tools', name: '精选工具', icon: 'fa-tools' },
-        { id: 'course', name: '课程浏览', icon: 'fa-book-open' },
-        { id: 'projects', name: '项目情况', icon: 'fa-project-diagram' },
-        { id: 'audit', name: '审核中心', icon: 'fa-gavel', adminOnly: true, route: '/check/audit' }
+        { id: 'common', name: '常用', icon: 'fa-star', i18nKey: 'common' },
+        { id: 'tools', name: '精选工具', icon: 'fa-tools', i18nKey: 'tools' },
+        { id: 'course', name: '课程浏览', icon: 'fa-book-open', i18nKey: 'course' },
+        { id: 'projects', name: '项目情况', icon: 'fa-project-diagram', i18nKey: 'projects' },
+        { id: 'dashboard', name: '运营大屏', icon: 'fa-chart-line', route: '/insights/dashboard', i18nKey: 'dashboard', adminOnly: true },
+        { id: 'knowledge', name: '关联图谱', icon: 'fa-circle-nodes', route: '/insights/knowledge-graph', i18nKey: 'knowledge', adminOnly: true },
+        { id: 'telemetry', name: '可观测性', icon: 'fa-gauge-high', route: '/insights/telemetry', i18nKey: 'telemetry', adminOnly: true },
+        { id: 'longlist', name: '长列表', icon: 'fa-list-ul', route: '/insights/long-list', i18nKey: 'longlist', adminOnly: true },
+        { id: 'ragagent', name: 'RAG 助手', icon: 'fa-robot', route: '/insights/rag-agent', i18nKey: 'ragagent', adminOnly: true },
+        { id: 'persona', name: '会话画像', icon: 'fa-user-clock', route: '/insights/session-persona', i18nKey: 'persona', adminOnly: true },
+        { id: 'timeline', name: '事件时间线', icon: 'fa-clock-rotate-left', route: '/insights/event-timeline', i18nKey: 'timeline', adminOnly: true },
+        { id: 'audit', name: '审核中心', icon: 'fa-gavel', adminOnly: true, route: '/check/audit', i18nKey: 'audit' }
       ],
       engines: [
         { name: '本站', value: 'local' },
@@ -489,7 +497,13 @@ export default createStore({
 
         const response = await HttpManager.SignUp(params)
 
-        if (response.message === '注册成功' || response.code === 1 || response.code === 200) {
+        const msg = response.message || ''
+        if (
+          msg === '注册成功' ||
+          /registration successful/i.test(msg) ||
+          response.code === 1 ||
+          response.code === 200
+        ) {
           return { success: true, message: '注册成功' }
         } else {
           return {
@@ -642,17 +656,17 @@ export default createStore({
     },
 
     // 获取首页精选工具（从工具资源中获取浏览量最高的10个）
-    async fetchHomeTools({ commit }) {
+    async fetchHomeTools({ commit, state }) {
       try {
         const response = await HttpManager.getTools({
-          page: 1,
           page_size: 100 // 获取足够多的数据以便排序
         })
 
         const isSuccess = (response && (response.code === 200 || response.message === 'success'))
-        const toolsData = response?.data || response?.data?.list || []
+        // 后端返回格式：{ message: "success", data: [...] }
+        const toolsData = response?.data || []
 
-        if (isSuccess && Array.isArray(toolsData)) {
+        if (isSuccess && Array.isArray(toolsData) && toolsData.length > 0) {
           // 按浏览量排序，取前10个
           const sortedTools = toolsData
             .sort((a, b) => (b.views || 0) - (a.views || 0))
@@ -678,10 +692,43 @@ export default createStore({
 
           commit('setHomeTools', sortedTools)
           return sortedTools
+        } else {
+          // 如果响应格式不正确或数据为空，使用默认数据
+          console.warn('获取首页精选工具失败或数据为空，使用默认数据', response)
+          // 确保使用默认数据（如果state中已有默认数据，则不需要更新）
+          if (!state.home.tools || state.home.tools.length === 0) {
+            // 如果默认数据也被清空了，重新设置默认数据
+            const defaultTools = [
+              { name: 'DeepL', url: 'https://www.deepl.com', icon: 'https://www.deepl.com/img/logo/deepl-logo-blue.svg', desc: '高精度翻译工具' },
+              { name: 'SmallPDF', url: 'https://smallpdf.com', icon: 'https://smallpdf.com/images/favicon.png', desc: 'PDF 处理在线工具' },
+              { name: 'Canvas', url: 'https://www.canva.com', icon: 'https://static.canva.com/static/images/favicon-96x96.png', desc: '在线设计平台' },
+              { name: 'Figma', url: 'https://www.figma.com', icon: 'https://static.figma.com/uploads/logo.png', desc: 'UI/UX 设计工具' },
+              { name: 'GitHub', url: 'https://github.com', icon: 'https://github.githubassets.com/favicons/favicon.png', desc: '代码托管平台' },
+              { name: 'Excalibur', url: 'https://excalidraw.com', icon: 'https://excalidraw.com/favicon.ico', desc: '手绘风格绘图' },
+              { name: 'ProcessOn', url: 'https://www.processon.com', icon: 'https://www.processon.com/favicon.ico', desc: '在线流程图工具' },
+              { name: 'Wormhole', url: 'https://wormhole.app', icon: 'https://wormhole.app/favicon.ico', desc: '安全文件共享' },
+              { name: 'PhotoKit', url: 'https://www.photokit.com', icon: 'https://www.photokit.com/favicon.ico', desc: '在线照片编辑' },
+              { name: 'VirScan', url: 'https://www.virscan.org', icon: 'https://www.virscan.org/favicon.ico', desc: '病毒扫描工具' }
+            ]
+            commit('setHomeTools', defaultTools)
+          }
         }
       } catch (error) {
         console.error('获取首页精选工具失败:', error)
-        // 保持默认数据，不更新
+        // API调用失败，使用默认数据
+        const defaultTools = [
+          { name: 'DeepL', url: 'https://www.deepl.com', icon: 'https://www.deepl.com/img/logo/deepl-logo-blue.svg', desc: '高精度翻译工具' },
+          { name: 'SmallPDF', url: 'https://smallpdf.com', icon: 'https://smallpdf.com/images/favicon.png', desc: 'PDF 处理在线工具' },
+          { name: 'Canvas', url: 'https://www.canva.com', icon: 'https://static.canva.com/static/images/favicon-96x96.png', desc: '在线设计平台' },
+          { name: 'Figma', url: 'https://www.figma.com', icon: 'https://static.figma.com/uploads/logo.png', desc: 'UI/UX 设计工具' },
+          { name: 'GitHub', url: 'https://github.com', icon: 'https://github.githubassets.com/favicons/favicon.png', desc: '代码托管平台' },
+          { name: 'Excalibur', url: 'https://excalidraw.com', icon: 'https://excalidraw.com/favicon.ico', desc: '手绘风格绘图' },
+          { name: 'ProcessOn', url: 'https://www.processon.com', icon: 'https://www.processon.com/favicon.ico', desc: '在线流程图工具' },
+          { name: 'Wormhole', url: 'https://wormhole.app', icon: 'https://wormhole.app/favicon.ico', desc: '安全文件共享' },
+          { name: 'PhotoKit', url: 'https://www.photokit.com', icon: 'https://www.photokit.com/favicon.ico', desc: '在线照片编辑' },
+          { name: 'VirScan', url: 'https://www.virscan.org', icon: 'https://www.virscan.org/favicon.ico', desc: '病毒扫描工具' }
+        ]
+        commit('setHomeTools', defaultTools)
       }
     },
 
@@ -703,8 +750,6 @@ export default createStore({
           coursesData = response
         }
 
-        console.log('首页课程数据:', { response, coursesData, count: coursesData.length })
-
         if (Array.isArray(coursesData) && coursesData.length > 0) {
           // 按浏览量（views）或点赞数（likes）排序，取前10个
           const sortedCourses = coursesData
@@ -720,6 +765,8 @@ export default createStore({
               let icon = ''
               if (course.image && Array.isArray(course.image) && course.image.length > 0 && course.image[0]) {
                 icon = course.image[0]
+              } else if (course.cover) {
+                icon = course.cover
               } else if (course.logo) {
                 icon = course.logo
               } else if (course.icon) {
@@ -744,17 +791,17 @@ export default createStore({
     },
 
     // 获取首页项目情况（从项目展示中获取浏览量最高的10个）
-    async fetchHomeProjects({ commit }) {
+    async fetchHomeProjects({ commit, state }) {
       try {
         const response = await HttpManager.getProjects({
-          page: 1,
           limit: 100 // 获取足够多的数据以便排序
         })
 
         const isSuccess = (response && (response.code === 200 || response.message === 'success'))
-        const projectsData = response?.data || response?.data?.list || []
+        // 后端返回格式：{ message: "success", data: [...] }
+        const projectsData = response?.data || []
 
-        if (isSuccess && Array.isArray(projectsData)) {
+        if (isSuccess && Array.isArray(projectsData) && projectsData.length > 0) {
           // 按浏览量排序，取前10个
           const sortedProjects = projectsData
             .sort((a, b) => (b.views || 0) - (a.views || 0))
@@ -772,9 +819,13 @@ export default createStore({
                 icon = project.icon
               }
               
+              // 确保项目ID存在，否则使用项目列表页URL
+              const projectId = project.id || project.projectId
+              const url = projectId ? `/projects/detail/${projectId}` : '/projects'
+              
               return {
                 name: project.name || project.title || '未命名项目',
-                url: `/projects/detail/${project.id || project.projectId}`,
+                url: url,
                 icon: icon, // 如果为空，将在模板中使用默认图片
                 desc: project.description || project.desc || '暂无描述'
               }
@@ -782,10 +833,44 @@ export default createStore({
 
           commit('setHomeProjects', sortedProjects)
           return sortedProjects
+        } else {
+          // 如果响应格式不正确或数据为空，使用默认数据
+          console.warn('获取首页项目情况失败或数据为空，使用默认数据', response)
+          // 确保使用默认数据（如果state中已有默认数据，则不需要更新）
+          if (!state.home.projects || state.home.projects.length === 0) {
+            // 如果默认数据也被清空了，重新设置默认数据
+            // 注意：默认项目的URL指向功能页面，不是项目详情页
+            const defaultProjects = [
+              { name: '项目管理', url: '/projects', icon: 'https://fakeicon.com/project.svg', desc: '管理所有项目' },
+              { name: '任务看板', url: '/kanban', icon: 'https://fakeicon.com/kanban.svg', desc: '可视化任务跟踪' },
+              { name: '代码仓库', url: '/repo', icon: 'https://fakeicon.com/repo.svg', desc: '代码存储与协作' },
+              { name: '文档中心', url: '/docs', icon: 'https://fakeicon.com/docs.svg', desc: '项目文档库' },
+              { name: '统计报表', url: '/report', icon: 'https://fakeicon.com/chart.svg', desc: '数据分析报告' },
+              { name: '成员管理', url: '/members', icon: 'https://fakeicon.com/team.svg', desc: '团队成员设置' },
+              { name: '文件共享', url: '/files', icon: 'https://fakeicon.com/folder.svg', desc: '安全文件交换' },
+              { name: '会议记录', url: '/meeting', icon: 'https://fakeicon.com/note.svg', desc: '会议纪要管理' },
+              { name: '反馈收集', url: '/feedback', icon: 'https://fakeicon.com/message.svg', desc: '用户反馈系统' },
+              { name: '设置', url: '/settings', icon: 'https://fakeicon.com/setting.svg', desc: '项目配置中心' }
+            ]
+            commit('setHomeProjects', defaultProjects)
+          }
         }
       } catch (error) {
         console.error('获取首页项目情况失败:', error)
-        // 保持默认数据，不更新
+        // API调用失败，使用默认数据
+        const defaultProjects = [
+          { name: '项目管理', url: '/projects', icon: 'https://fakeicon.com/project.svg', desc: '管理所有项目' },
+          { name: '任务看板', url: '/kanban', icon: 'https://fakeicon.com/kanban.svg', desc: '可视化任务跟踪' },
+          { name: '代码仓库', url: '/repo', icon: 'https://fakeicon.com/repo.svg', desc: '代码存储与协作' },
+          { name: '文档中心', url: '/docs', icon: 'https://fakeicon.com/docs.svg', desc: '项目文档库' },
+          { name: '统计报表', url: '/report', icon: 'https://fakeicon.com/chart.svg', desc: '数据分析报告' },
+          { name: '成员管理', url: '/members', icon: 'https://fakeicon.com/team.svg', desc: '团队成员设置' },
+          { name: '文件共享', url: '/files', icon: 'https://fakeicon.com/folder.svg', desc: '安全文件交换' },
+          { name: '会议记录', url: '/meeting', icon: 'https://fakeicon.com/note.svg', desc: '会议纪要管理' },
+          { name: '反馈收集', url: '/feedback', icon: 'https://fakeicon.com/message.svg', desc: '用户反馈系统' },
+          { name: '设置', url: '/settings', icon: 'https://fakeicon.com/setting.svg', desc: '项目配置中心' }
+        ]
+        commit('setHomeProjects', defaultProjects)
       }
     },
 
@@ -797,9 +882,13 @@ export default createStore({
         if (state.home.searchEngine === 'local') {
           // 跳转到搜索页面，并传递搜索关键词
           if (router) {
+            const intent = detectSearchIntent(q)
             router.push({
               path: '/search',
-              query: { q: q }
+              query: {
+                q,
+                ...(intent === 'all' ? {} : { type: intent })
+              }
             })
           }
           commit('setSearchInput', '')  // 清空搜索输入框
@@ -1018,6 +1107,12 @@ export default createStore({
 
     // 获取项目详情
     async getProjectDetail({ commit, state, dispatch }, projectId) {
+      // 验证项目ID是否有效
+      if (!projectId || projectId === 'undefined' || projectId === 'null') {
+        console.error('项目ID无效:', projectId)
+        throw new Error('项目ID无效')
+      }
+      
       try {
         const response = await HttpManager.getProjectDetail(projectId)
         
@@ -1040,11 +1135,31 @@ export default createStore({
         }
 
         // 如果后端没有返回数据，尝试从本地列表中查找（模拟数据回退）
-        return state.projects.projectsList.find(p => (p.id === parseInt(projectId) || p.projectId === parseInt(projectId))) || null
+        const localProject = state.projects.projectsList.find(p => (p.id === parseInt(projectId) || p.projectId === parseInt(projectId)))
+        if (localProject) {
+          return localProject
+        }
+        
+        // 如果都找不到，返回null
+        console.warn('项目不存在:', projectId)
+        return null
       } catch (error) {
         console.error('获取项目详情失败:', error)
+        
+        // 如果是404错误，说明项目不存在
+        if (error.response?.status === 404) {
+          console.warn('项目不存在（404）:', projectId)
+          return null
+        }
+        
         // 如果后端出错，尝试从本地列表中查找（模拟数据回退）
-        return state.projects.projectsList.find(p => (p.id === parseInt(projectId) || p.projectId === parseInt(projectId))) || null
+        const localProject = state.projects.projectsList.find(p => (p.id === parseInt(projectId) || p.projectId === parseInt(projectId)))
+        if (localProject) {
+          return localProject
+        }
+        
+        // 如果都找不到，抛出错误
+        throw error
       }
     },
 
@@ -1467,8 +1582,11 @@ export default createStore({
     // 获取登录状态
     isLoggedIn: (state) => state.isLogin,
 
-    // 判断是否是管理员
-    isAdmin: state => state.user.role === 'admin',
+    // 判断是否是管理员（含 superadmin，与 mixin 角色层级一致）
+    isAdmin: state => {
+      const r = state.user.role
+      return r === 'admin' || r === 'superadmin'
+    },
 
     // 获取用户角色
     getUserRole: (state) => state.user.role,
@@ -1514,9 +1632,9 @@ export default createStore({
     sidebarItems: (state) => state.home.sidebarItems,
     engines: (state) => state.home.engines,
 
-    // 可见的侧边栏项目（根据权限过滤）
-    visibleSidebarItems: (state) =>
-      state.home.sidebarItems.filter(item => !item.adminOnly || state.user.role === 'admin'),
+    // 可见的侧边栏项目（adminOnly 仅管理员可见）
+    visibleSidebarItems: (state, getters) =>
+      state.home.sidebarItems.filter(item => !item.adminOnly || getters.isAdmin),
 
     // 当前搜索引擎名称
     currentEngineName: (state) => {

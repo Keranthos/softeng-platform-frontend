@@ -3,7 +3,7 @@
   <div
     class="flex items-center justify-between p-3 rounded-xl border transition-all duration-300 cursor-pointer group"
     :class="containerClass"
-    @click="$emit('click', resource)"
+    @click="emit('click', resource)"
   >
     <div class="flex items-center gap-3 min-w-0">
       <div class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" :class="iconContainerClass">
@@ -21,7 +21,7 @@
 
     <div v-if="type === 'doc'" class="shrink-0">
       <button
-        @click.stop="$emit('download', resource)"
+        @click.stop="emit('download', resource)"
         class="w-8 h-8 rounded-full flex items-center justify-center text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-all"
       >
         <i class="fas fa-download text-sm"></i>

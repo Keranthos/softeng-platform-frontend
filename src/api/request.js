@@ -3,8 +3,9 @@ import { BASE_URL } from './config'
 import router from '../router'
 import { ElMessage } from 'element-plus'
 import store from '../store'
+import { recordHttpMetric } from '@/utils/apiMetrics'
 
-axios.defaults.timeout = 5000
+axios.defaults.timeout = 30000 // 增加到30秒，避免复杂查询超时
 axios.defaults.withCredentials = true
 axios.defaults.headers.post['Content-Type'] = 'application/x-www-form-urlencoded;charset=UTF-8'
 
@@ -22,6 +23,7 @@ axios.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    config._metricsT0 = Date.now()
     return config
   },
   error => {
@@ -32,10 +34,36 @@ axios.interceptors.request.use(
 // 响应拦截器
 axios.interceptors.response.use(
   response => {
-    // 直接返回response，让get/post函数自己处理response.data
+    try {
+      const t0 = response.config._metricsT0
+      if (t0) {
+        recordHttpMetric({
+          url: response.config.url || '',
+          method: String(response.config.method || 'get').toUpperCase(),
+          durationMs: Date.now() - t0,
+          status: response.status
+        })
+      }
+    } catch (e) {
+      void e
+    }
     return Promise.resolve(response)
   },
   error => {
+    try {
+      const cfg = error.config
+      const t0 = cfg && cfg._metricsT0
+      if (t0) {
+        recordHttpMetric({
+          url: (cfg && cfg.url) || '',
+          method: String((cfg && cfg.method) || 'get').toUpperCase(),
+          durationMs: Date.now() - t0,
+          status: (error.response && error.response.status) || 0
+        })
+      }
+    } catch (e) {
+      void e
+    }
     if (error.response?.status) {
       switch (error.response.status) {
         case 401: {
@@ -58,7 +86,9 @@ axios.interceptors.response.use(
             (url.includes('/tools') && !url.includes('/collections') && !url.includes('/like') && !url.includes('/submit')) ||
             (url.includes('/projects') && !url.includes('/collections') && !url.includes('/like') && !url.includes('/upload'))
           )
-          const isPublicPostEndpoint = method === 'post' && url.includes('/view') && url.includes('/course')
+          const isPublicPostEndpoint = method === 'post' && (
+            (url.includes('/view') && url.includes('/course'))
+          )
           
           if (!isAuthEndpoint && !isPublicGetEndpoint && !isPublicPostEndpoint) {
             // 只有在需要认证的接口返回401时，才清除登录状态
@@ -115,6 +145,25 @@ export function get (url, params = {}, config = {}) {
     }
     
     axios.get(url, axiosConfig)
+      .then(response => {
+        resolve(response.data)
+      })
+      .catch(err => {
+        reject(err)
+      })
+  })
+}
+
+/** JSON POST（覆盖默认的 x-www-form-urlencoded） */
+export function postJSON (url, data = {}, config = {}) {
+  return new Promise((resolve, reject) => {
+    axios.post(url, data, {
+      ...config,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(config.headers || {})
+      }
+    })
       .then(response => {
         resolve(response.data)
       })

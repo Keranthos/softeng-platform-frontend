@@ -5,6 +5,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
 import store from './store'
+import i18n from './i18n'
 import '@fortawesome/fontawesome-free/css/all.css'
 
 import { createPinia } from 'pinia'
@@ -22,6 +23,7 @@ app.use(pinia)
 app.use(ElementPlus)
 app.use(router)
 app.use(store)
+app.use(i18n)
 
 // 修复 chunk 加载错误：添加全局错误处理
 window.addEventListener('error', (event) => {

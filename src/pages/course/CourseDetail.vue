@@ -77,10 +77,28 @@
             <p class="text-gray-600 leading-7 text-justify whitespace-pre-line text-sm md:text-base">
               {{ courseInfo.description }}
             </p>
+            <ResourceAiSummary
+              :title="courseInfo.name"
+              :body="String(courseInfo.description || '')"
+              class="mt-5"
+            />
+            <CourseLearningPath
+              :course-id="String(route.params.id || route.params.courseId || '')"
+              :course-title="courseInfo.name"
+            />
           </div>
         </div>
       </div>
     </div>
+
+    <ResourceRecommendBar
+      kind="course"
+      :current-id="String(route.params.id || route.params.courseId || '')"
+      :title="courseInfo.name"
+      :category="String(courseInfo.semester || '')"
+      :keywords="courseRecommendKeywords"
+      class="max-w-6xl mx-auto"
+    />
 
     <div class="bg-white/90 backdrop-blur-xl rounded-2xl p-6 md:p-8 shadow-sm border border-white/50">
       <div class="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
@@ -340,6 +358,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { HttpManager } from '@/api'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { getImageUrl } from '@/utils/image'
+import ResourceAiSummary from '@/components/ResourceAiSummary.vue'
+import ResourceRecommendBar from '@/components/ResourceRecommendBar.vue'
+import CourseLearningPath from '@/components/CourseLearningPath.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -364,6 +385,23 @@ const courseInfo = ref({
   credit: 0,
   cover: '',
   description: ''
+})
+
+const courseRecommendKeywords = computed(() => {
+  const kws = []
+  const name = courseInfo.value.name
+  if (name) {
+    kws.push(name)
+    name.split(/\s+/).forEach((w) => {
+      if (w.length > 1) kws.push(w)
+    })
+  }
+  const teacher = courseInfo.value.teacher
+  if (teacher) {
+    if (Array.isArray(teacher)) kws.push(...teacher.filter(Boolean))
+    else kws.push(String(teacher))
+  }
+  return [...new Set(kws)].filter(Boolean).slice(0, 8)
 })
 
 // 计算课程封面图片URL（使用计算属性避免模板中直接调用函数）

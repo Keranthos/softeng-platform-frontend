@@ -48,6 +48,12 @@
           {{ tool.fullDesc }}
         </p>
 
+        <ResourceAiSummary
+          :title="tool.name"
+          :body="tool.instructions || ''"
+          class="mb-6"
+        />
+
         <!-- 工具标签 -->
         <div class="flex items-center gap-4 text-sm text-gray-500 mb-6">
           <span class="whitespace-nowrap">标签:</span>
@@ -80,6 +86,16 @@
         <p class="mt-2 text-xs text-gray-400">链接直达，点击后跳转新页面，为对应工具的网页。</p>
       </div>
     </div>
+
+    <ResourceRecommendBar
+      kind="tool"
+      :current-id="route.params.id"
+      :title="tool.name"
+      :category="tool.category"
+      :keywords="recommendKeywords"
+      class="mb-8"
+    />
+
     <!-- 使用说明 -->
     <div class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-8">
       <h2 class="text-lg font-bold text-[#00a99d] flex items-center gap-2 mb-6">
@@ -268,6 +284,8 @@ import { HttpManager } from '@/api'
 import { predefinedTags } from '@/data/tool/tags'
 import { deleteMockComment, getCommentsByToolId } from '@/data/tool/mockData'
 import detailSkeleton from '@/components/DetailSkeleton.vue'
+import ResourceAiSummary from '@/components/ResourceAiSummary.vue'
+import ResourceRecommendBar from '@/components/ResourceRecommendBar.vue'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { getImageUrl } from '@/utils/image'
 
@@ -329,6 +347,19 @@ const sortedComments = computed(() => {
 const getTagById = (tagId) => {
   return predefinedTags.find(tag => tag.id === tagId) || { name: tagId }
 }
+
+const recommendKeywords = computed(() => {
+  if (!tool.value) return []
+  const kws = []
+  if (tool.value.name) kws.push(tool.value.name)
+  if (tool.value.category) kws.push(tool.value.category)
+  if (Array.isArray(tool.value.tags)) {
+    tool.value.tags.forEach((tid) => {
+      kws.push(getTagById(tid).name)
+    })
+  }
+  return [...new Set(kws)].filter(Boolean)
+})
 // 2. 点击标签的跳转逻辑
 const goToToolsListByTag = (tagId) => {
   // 获取标签的显示名称

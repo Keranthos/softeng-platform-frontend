@@ -79,6 +79,39 @@
                 </p>
             </div>
 
+            <!-- 审核状态机可视化（报告：工作流 / BPMN 轻量呈现） -->
+            <div class="workflow-section mb-8">
+                <el-card shadow="never" class="workflow-card border border-indigo-100 bg-gradient-to-r from-indigo-50/80 to-slate-50">
+                    <template #header>
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <span class="font-semibold text-indigo-900">
+                                <i class="fas fa-diagram-project mr-2 text-indigo-500" /> 审核状态机与 SLA 示意
+                            </span>
+                            <el-tag type="info" size="small">非阻塞 · 仅展示流程</el-tag>
+                        </div>
+                    </template>
+                    <el-steps :active="workflowStep" finish-status="success" align-center class="workflow-steps">
+                        <el-step title="用户提交" description="表单 / 附件入库" />
+                        <el-step title="自动校验" description="格式、敏感词扫描" />
+                        <el-step title="待人工审核" description="进入本队列" />
+                        <el-step title="裁定" description="通过 / 驳回 + 原因" />
+                    </el-steps>
+                    <div class="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm text-slate-600">
+                        <span><i class="fas fa-clock text-amber-500 mr-1" /> 目标 SLA：工作日 24h 内初审</span>
+                        <span class="hidden sm:inline text-slate-300">|</span>
+                        <span><i class="fas fa-shield-halved text-emerald-600 mr-1" /> 关键节点可对接审计日志</span>
+                    </div>
+                    <div class="mt-4 flex justify-center">
+                        <el-button-group size="small">
+                            <el-button @click="workflowStep = 0">演示：提交</el-button>
+                            <el-button @click="workflowStep = 1">校验</el-button>
+                            <el-button @click="workflowStep = 2">待审</el-button>
+                            <el-button type="primary" @click="workflowStep = 3">裁定</el-button>
+                        </el-button-group>
+                    </div>
+                </el-card>
+            </div>
+
             <!-- 标签页 -->
             <el-tabs v-model="activeTab" class="mt-6">
                 <el-tab-pane name="tools">
@@ -103,6 +136,14 @@
                     </template>
                 </el-tab-pane>
             </el-tabs>
+
+            <div v-if="items.length" class="batch-toolbar flex flex-wrap items-center gap-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <span class="text-sm text-slate-600">已选 <b>{{ selectedIds.length }}</b> 条</span>
+              <el-button size="small" @click="selectAllPage">全选本页</el-button>
+              <el-button size="small" @click="clearSelection">清空选择</el-button>
+              <el-button type="success" size="small" :disabled="!selectedIds.length" @click="batchReview('approve')">批量通过</el-button>
+              <el-button type="danger" size="small" plain :disabled="!selectedIds.length" @click="batchReview('reject')">批量拒绝</el-button>
+            </div>
 
             <!-- 审核内容区域 -->
             <div class="mt-8">
@@ -141,6 +182,12 @@
                                          'border-green-200 bg-green-50': activeTab === 'courses',
                                          'border-purple-200 bg-purple-50': activeTab === 'projects'}"
                             >
+                                <div class="flex gap-2 mb-2">
+                                    <el-checkbox
+                                        :model-value="isItemSelected(item)"
+                                        @update:model-value="(v) => setItemSelected(item, v)"
+                                    />
+                                </div>
                                 <!-- 卡片头部 -->
                                 <div class="item-head mb-4">
                                     <div class="flex justify-between items-start">
@@ -331,6 +378,8 @@ import { HttpManager } from '../../api'
 import { getPendingReviewsMock, reviewItemMock } from '@/data/check/mockData'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { predefinedTags } from '@/data/tool/tags'
+import { appendJournalEvent } from '@/utils/eventJournal'
+import { pushDemoNotification } from '@/utils/demoNotifications'
 const useMock = false // 改为false以使用真实后端API
 
 const router = useRouter()
@@ -343,9 +392,12 @@ const items = ref([]) // 待审核项目列表
 const page = ref(1) // 当前页码
 const pageSize = ref(6) // 每页条数
 const total = ref(0) // 总条数
+const selectedIds = ref([]) // 批量审核选中 id
 // 用户菜单显示控制
 const showUserMenu = ref(false)
 const avatarRef = ref(null)
+/** 审核流程演示步骤（0~3），用于状态机可视化 */
+const workflowStep = ref(2)
 
 // 用户状态（从 store 获取）
 const isAuthenticated = computed(() => {
@@ -538,6 +590,19 @@ async function review(item, action) {
 
         ElMessage.success(`已${actionText}该${getTypeLabel()}`)
 
+        appendJournalEvent({
+            kind: 'audit',
+            title: `审核${actionText}：${getTypeLabel()}`,
+            detail: getItemField(item, 'title')
+        })
+        if (action === 'approve') {
+            pushDemoNotification({
+                title: '审核通过',
+                body: `「${getItemField(item, 'title')}」已通过（演示通知）。`,
+                type: 'success'
+            })
+        }
+
         // 从当前列表中移除已处理项
         items.value = items.value.filter(i => 
             (i.id || i._id || i.resourceId) !== (item.id || item._id || item.resourceId)
@@ -572,10 +637,89 @@ const closeDropdowns = (e) => {
     }
 }
 
-// 四、监听标签页变化
+function idOf (item) {
+    return item.id || item._id || item.resourceId
+}
+function isItemSelected (item) {
+    return selectedIds.value.includes(idOf(item))
+}
+function setItemSelected (item, checked) {
+    const id = idOf(item)
+    const arr = [...selectedIds.value]
+    const i = arr.indexOf(id)
+    if (checked && i === -1) arr.push(id)
+    if (!checked && i >= 0) arr.splice(i, 1)
+    selectedIds.value = arr
+}
+function selectAllPage () {
+    const ids = items.value.map(idOf).filter(Boolean)
+    selectedIds.value = [...new Set([...selectedIds.value, ...ids])]
+}
+function clearSelection () {
+    selectedIds.value = []
+}
+
+async function batchReview (action) {
+    if (!selectedIds.value.length) return
+    const selItems = items.value.filter(i => selectedIds.value.includes(idOf(i)))
+    if (!selItems.length) return
+
+    let rejectReason = ''
+    if (action === 'reject') {
+        const { value } = await ElMessageBox.prompt(
+            `请输入批量拒绝原因（将应用于所选的 ${selItems.length} 条）：`,
+            '批量拒绝',
+            {
+                confirmButtonText: '确认',
+                cancelButtonText: '取消',
+                type: 'warning',
+                inputType: 'textarea',
+                inputValidator: (v) => (v && v.trim() ? true : '原因不能为空')
+            }
+        )
+        rejectReason = value || ''
+    } else {
+        await ElMessageBox.confirm(
+            `确认批量通过所选的 ${selItems.length} 条？`,
+            '批量通过',
+            { type: 'success' }
+        )
+    }
+
+    try {
+        for (const item of selItems) {
+            const params = {
+                action,
+                resourceType: activeTab.value,
+                reject_reason: rejectReason
+            }
+            if (useMock) {
+                await reviewItemMock(idOf(item), params)
+            } else {
+                await HttpManager.reviewItem(idOf(item), params)
+            }
+            appendJournalEvent({
+                kind: 'audit',
+                title: `批量${action === 'approve' ? '通过' : '拒绝'}：${getTypeLabel()}`,
+                detail: getItemField(item, 'title')
+            })
+        }
+    } catch (err) {
+        console.error(err)
+        ElMessage.error('批量操作中断，请重试')
+        await fetchPending(null, page.value)
+        return
+    }
+
+    ElMessage.success('批量操作已完成')
+    selectedIds.value = []
+    await fetchPending(null, page.value)
+}
+
 watch(activeTab, (newTab) => {
     console.log('切换到标签页：', newTab)
     page.value = 1
+    selectedIds.value = []
     fetchPending(newTab, 1)
 })
 
@@ -678,15 +822,13 @@ onUnmounted(() => {
     padding: 48px 0;
 }
 
-.audit-pagination {
-    :deep(.el-pagination__jump) {
-        margin-left: 16px;
-    }
-    
-    :deep(.el-pagination__total) {
-        margin-left: 16px;
-        font-size: 14px;
-    }
+.audit-pagination :deep(.el-pagination__jump) {
+    margin-left: 16px;
+}
+
+.audit-pagination :deep(.el-pagination__total) {
+    margin-left: 16px;
+    font-size: 14px;
 }
 
 .line-clamp-2 {

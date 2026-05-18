@@ -2,7 +2,7 @@
   <div class="space-y-8 relative">
     <header class="flex justify-between items-center sticky top-0 z-40 py-4 glass-header rounded-2xl px-6 mb-8">
       <!-- 主页按钮 -->
-      <div>
+      <div class="flex items-center gap-4">
         <router-link to="/home" class="flex items-center gap-2 text-gray-600 hover:text-blue-600 font-medium transition-colors">
           <i class="fas fa-home"></i> 主页
         </router-link>
@@ -221,6 +221,11 @@
       <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
       <p>资源加载中...</p>
     </div>
+    <div v-else-if="toolsLoadError" class="text-center py-20 px-6 text-gray-600">
+      <i class="fas fa-plug text-3xl text-amber-500 mb-4"></i>
+      <p class="mb-4">{{ toolsLoadError }}</p>
+      <button type="button" class="px-6 py-2 rounded-full bg-blue-600 text-white text-sm hover:bg-blue-700" @click="reloadToolsList">重试</button>
+    </div>
     <div v-else-if="!toolsList.length" class="text-center py-20 text-gray-400">
       <i class="fas fa-inbox text-3xl mb-4"></i>
       <p>暂无工具资源</p>
@@ -236,7 +241,7 @@
         </div>
         <!-- 修改网格容器 -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div v-for="tool in getToolsByCategory(category)" :key="tool.resourceId || tool.id" class="tool-card-container relative"
+          <div v-for="tool in getToolsByCategory(category)" :key="tool.resourceId || tool.id" class="tool-card-container relative cv-tool"
             @mouseenter="handleMouseEnter(tool.resourceId || tool.id)" @mouseleave="handleMouseLeave(tool.resourceId || tool.id)">
             <!-- 卡片内容 -->
             <div
@@ -336,9 +341,29 @@ const showUserMenu = ref(false)
 const activeToolId = ref(null)
 const engineRef = ref(null)
 const tooltipTimers = ref({})
+const TOOLTIP_DELAY = 500 // 悬停提示延迟（ms），与 CSS transition-delay 一致
 const tagFilterSearch = ref('') // 标签过滤搜索
 
-const TOOLTIP_DELAY = 500
+const toolsLoadError = ref('')
+
+const reloadToolsList = async () => {
+  toolsLoadError.value = ''
+  try {
+    await store.dispatch('fetchTools', { useMock: false })
+    if (toolsList.value.length === 0) {
+      await store.dispatch('fetchTools', { useMock: true })
+    }
+  } catch (e) {
+    try {
+      await store.dispatch('fetchTools', { useMock: true })
+    } catch (e2) {
+      toolsLoadError.value = '无法加载工具列表，请检查网络后重试'
+    }
+  }
+  if (toolsList.value.length === 0 && !toolsLoadError.value) {
+    toolsLoadError.value = '暂无工具数据'
+  }
+}
 
 // 二、计算属性
 // 1. 过滤后的标签
@@ -651,16 +676,21 @@ onMounted(async () => {
 
   // 没有数据时需要加载数据
   if (toolsList.value.length === 0) {
-    // 优先尝试从后端获取，如果失败则使用mock数据
     try {
       await store.dispatch('fetchTools', { useMock: false })
-      // 如果后端返回但数据为空，使用mock数据
       if (toolsList.value.length === 0) {
         await store.dispatch('fetchTools', { useMock: true })
       }
     } catch (error) {
-      console.error('获取工具列表失败，使用mock数据:', error)
-      await store.dispatch('fetchTools', { useMock: true })
+      console.error('获取工具列表失败，尝试演示数据:', error)
+      try {
+        await store.dispatch('fetchTools', { useMock: true })
+      } catch (e2) {
+        toolsLoadError.value = '无法加载工具列表，请检查网络后重试'
+      }
+    }
+    if (toolsList.value.length === 0 && !toolsLoadError.value) {
+      toolsLoadError.value = '暂无工具数据'
     }
   }
 
@@ -920,5 +950,11 @@ onUnmounted(() => {
 
 .animate-slide-down {
   animation: slideDown 0.3s ease-out;
+}
+
+/* A14：长列表 off-screen 渲染优化（content-visibility） */
+.cv-tool {
+  content-visibility: auto;
+  contain-intrinsic-size: 280px 200px;
 }
 </style>

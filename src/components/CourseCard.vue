@@ -2,7 +2,7 @@
 <template>
   <div
     class="group bg-white rounded-2xl p-6 border border-gray-100 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden"
-    @click="$emit('click')"
+    @click="emit('click')"
   >
     <!-- 课程类型颜色条 -->
     <div
@@ -64,10 +64,9 @@
 </template>
 
 <script setup>
-// 明确导入 defineProps 和 defineEmits
 import { defineProps, defineEmits } from 'vue'
 
-const props = defineProps({
+defineProps({
   course: {
     type: Object,
     required: true

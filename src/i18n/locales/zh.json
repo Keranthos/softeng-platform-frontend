@@ -1,0 +1,31 @@
+{
+  "sidebar": {
+    "common": "常用",
+    "tools": "精选工具",
+    "course": "课程浏览",
+    "projects": "项目情况",
+    "dashboard": "运营大屏",
+    "knowledge": "关联图谱",
+    "telemetry": "可观测性",
+    "longlist": "长列表",
+    "ragagent": "RAG 助手",
+    "persona": "会话画像",
+    "timeline": "事件时间线",
+    "audit": "审核中心"
+  },
+  "home": {
+    "searchPlaceholder": "输入想要搜索的内容...",
+    "searchBtn": "搜索",
+    "motivate": "今天也要加油哦！",
+    "sectionCommon": "常用",
+    "sectionTools": "精选工具",
+    "sectionCourse": "课程浏览",
+    "sectionProjects": "项目情况",
+    "more": "更多 →",
+    "notif": "通知",
+    "notifEmpty": "暂无通知",
+    "markRead": "全部已读",
+    "lang": "语言",
+    "engineLocal": "本站"
+  }
+}

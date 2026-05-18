@@ -1,4 +1,4 @@
-import { get, post, put, deletes } from './request'
+import { get, post, put, deletes, postJSON } from './request'
 
 export const userAPI = {
   // 获取用户资料（token 已在请求拦截器中自动添加）
@@ -211,7 +211,10 @@ const HttpManager = {
 
   // =======================> 管理员 API
   getPendingReviews: (params) => get('admin/pending', params),
-  reviewItem: (itemId, params) => get(`admin/review/${itemId}`, params)
+  reviewItem: (itemId, params) => get(`admin/review/${itemId}`, params),
+
+  // =======================> RAG Agent（需登录且管理员）
+  ragAgentChat: (message) => postJSON('api/agent/rag', { message })
 }
 
 export { HttpManager }

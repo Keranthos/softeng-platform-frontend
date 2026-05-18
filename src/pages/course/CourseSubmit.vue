@@ -153,6 +153,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { useStore } from 'vuex'  // 添加 Vuex
 import { ElMessage } from 'element-plus'
 import { HttpManager } from '@/api'
+import { scanText, scanUrl } from '@/utils/contentSafety'
+import { appendJournalEvent } from '@/utils/eventJournal'
 
 const router = useRouter()
 const route = useRoute()
@@ -210,6 +212,13 @@ const handleSubmit = async () => {
     return
   }
 
+  const t1 = scanText(formData.description || '')
+  const u1 = scanUrl(formData.link)
+  if (!t1.ok || !u1.ok) {
+    ElMessage.error([...t1.reasons, ...u1.reasons].join('；'))
+    return
+  }
+
   isSubmitting.value = true
 
   try {
@@ -232,7 +241,13 @@ const handleSubmit = async () => {
 
     if (response && (response.message || response.success)) {
       ElMessage.success(response.message || '提交成功！审核通过后将展示在列表页')
-      
+
+      appendJournalEvent({
+        kind: 'submit',
+        title: '上传课程资料',
+        detail: `${formData.courseName || ''} · ${formData.link || ''}`.slice(0, 200)
+      })
+
       // 重置表单
       formData.link = ''
       formData.description = ''

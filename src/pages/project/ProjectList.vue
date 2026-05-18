@@ -205,9 +205,13 @@
       </div>
     </header>
 
-    <div v-if="!projectsList.length" class="text-center py-20 text-gray-400">
+    <div v-if="projectsLoading" class="text-center py-20 text-gray-400">
       <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
       <p>项目加载中...</p>
+    </div>
+    <div v-else-if="!projectsList.length" class="text-center py-20 text-gray-400">
+      <i class="fas fa-inbox text-3xl mb-4"></i>
+      <p>暂无项目资源</p>
     </div>
 
     <div v-else class="space-y-12 pb-20">
@@ -286,6 +290,7 @@ const projectsList = computed(() => {
     return []
   }
 })
+const projectsLoading = computed(() => store.getters.projectsLoading)
 const categories = computed(() => {
   try {
     const cats = store.state.projects?.categories

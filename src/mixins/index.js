@@ -91,7 +91,7 @@ const mixin = {
       if (isCollected) {
         // 取消收藏
         HttpManager.removeCollection(resourceType, resourceId)
-          .then(res => {
+          .then(() => {
             this.showMessage('已取消收藏', 'success')
             this.$emit('collection-updated', false)
           })
@@ -102,7 +102,7 @@ const mixin = {
       } else {
         // 添加收藏
         HttpManager.toggleToolCollection(resourceId, resourceType)
-          .then(res => {
+          .then(() => {
             this.showMessage('收藏成功', 'success')
             this.$emit('collection-updated', true)
           })
@@ -139,7 +139,7 @@ const mixin = {
       const action = isLiked ? api.unlike : api.like
 
       action()
-        .then(res => {
+        .then(() => {
           const message = isLiked ? '已取消点赞' : '点赞成功'
           this.showMessage(message, 'success')
           this.$emit('like-updated', !isLiked)

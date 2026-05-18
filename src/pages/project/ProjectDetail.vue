@@ -62,6 +62,12 @@
           {{ project.description }}
         </p>
 
+        <ResourceAiSummary
+          :title="project.name"
+          :body="String(project.description || '')"
+          class="mb-6"
+        />
+
         <!-- 技术栈标签 -->
         <div class="flex items-center gap-4 text-sm text-gray-500 mb-6">
           <span class="whitespace-nowrap">技术栈:</span>
@@ -93,6 +99,16 @@
         <p class="mt-2 text-xs text-gray-400">点击链接访问项目仓库或在线演示。</p>
       </div>
     </div>
+
+    <ResourceRecommendBar
+      v-if="project"
+      kind="project"
+      :current-id="String(route.params.id)"
+      :title="project.name"
+      :category="project.category"
+      :keywords="projectRecommendKeywords"
+      class="mb-8"
+    />
 
     <!-- 项目图片展示区域 -->
     <div v-if="project.images && project.images.length > 0" class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-8">
@@ -284,6 +300,8 @@ import { useStore } from 'vuex' // 修改：使用 Vuex
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { HttpManager } from '@/api'
 import detailSkeleton from '@/components/DetailSkeleton.vue'
+import ResourceAiSummary from '@/components/ResourceAiSummary.vue'
+import ResourceRecommendBar from '@/components/ResourceRecommendBar.vue'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { getImageUrl } from '@/utils/image'
 // 假设有项目标签数据
@@ -331,6 +349,16 @@ const sortedComments = computed(() => {
     })
   }
   return sorted
+})
+
+const projectRecommendKeywords = computed(() => {
+  const p = project.value
+  if (!p) return []
+  const kws = []
+  if (p.name) kws.push(p.name)
+  if (p.category) kws.push(p.category)
+  if (Array.isArray(p.technologies)) kws.push(...p.technologies)
+  return [...new Set(kws)].filter(Boolean)
 })
 
 // 三、方法
@@ -452,9 +480,23 @@ const handleCollect = async () => {
 }
 
 const loadProjectDetail = async (id) => {
+  // 验证ID是否有效
+  if (!id || id === 'undefined' || id === 'null') {
+    ElMessage.error('项目ID无效')
+    router.push('/projects')
+    return
+  }
+  
   isLoading.value = true
   try {
     const projectData = await store.dispatch('getProjectDetail', id)
+    
+    // 如果项目不存在，跳转到项目列表页
+    if (!projectData) {
+      ElMessage.error('项目不存在')
+      router.push('/projects')
+      return
+    }
 
     // 调试：打印后端返回的原始数据
     console.log('项目详情原始数据:', projectData)
@@ -799,6 +841,12 @@ const openImageModal = (imageUrl, index) => {
 // 四、生命周期函数
 onMounted(async () => {
   const id = route.params.id
+  // 验证ID是否有效
+  if (!id || id === 'undefined' || id === 'null') {
+    ElMessage.error('项目ID无效，正在跳转到项目列表...')
+    router.push('/projects')
+    return
+  }
   await loadProjectDetail(id)
 })
 </script>

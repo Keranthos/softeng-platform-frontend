@@ -269,10 +269,20 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'  // 替换 Pinia 导入
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { predefinedTags } from '@/data/tool/tags'
 import { HttpManager } from '@/api'
 import { getImageUrl } from '@/utils/image'
+import { scanFields, scanUrl } from '@/utils/contentSafety'
+import { findSimilarTitles } from '@/utils/stringSimilarity'
+import { appendJournalEvent } from '@/utils/eventJournal'
+
+function normalizeSearchArray (res) {
+  if (!res) return []
+  if (Array.isArray(res)) return res
+  if (res.data && Array.isArray(res.data)) return res.data
+  return []
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -462,6 +472,35 @@ const submit = async () => {
     if (!isAuthenticated.value) {
       throw new Error('请先登录')
     }
+
+    const safety = scanFields([
+      { label: '名称', text: form.name },
+      { label: '简介', text: form.desc },
+      { label: '详细说明', text: form.fullDesc }
+    ])
+    const urlS = scanUrl(form.url)
+    if (!safety.ok || !urlS.ok) {
+      ElMessage.error([...safety.reasons, ...urlS.reasons].join('；'))
+      return
+    }
+
+    if (!isEditMode.value && (form.name || '').trim().length >= 2) {
+      try {
+        const res = await HttpManager.searchTools({ keyword: form.name.trim(), page_size: 40 })
+        const list = normalizeSearchArray(res)
+        const sims = findSimilarTitles(form.name, list, { threshold: 0.74, max: 5 })
+        if (sims.length) {
+          await ElMessageBox.confirm(
+            `检索到名称相近的已有工具：${sims.map(s => s.name).join('、')}。是否仍要提交？`,
+            '相似标题提示',
+            { type: 'warning', confirmButtonText: '仍要提交', cancelButtonText: '返回修改' }
+          )
+        }
+      } catch (e) {
+        if (e === 'cancel') return
+      }
+    }
+
     isSubmitting.value = true // 开启加载状态
 
     // 处理图标URL（外部URL或Base64，后端会自动本地化）
@@ -492,6 +531,12 @@ const submit = async () => {
     if (response && response.message) {
       // 清空本地草稿
       localStorage.removeItem(DRAFT_KEY);
+
+      appendJournalEvent({
+        kind: 'submit',
+        title: isEditMode.value ? '更新工具' : '提交工具',
+        detail: form.name
+      })
       
       // 重置表单
       Object.keys(form).forEach(key => {

@@ -76,7 +76,7 @@
               @click="handleNavItem(item)"
             >
               <i :class="['fas nav-icon', item.icon, !isSidebarCollapsed ? 'with-margin' : '']"></i>
-              <span v-if="!isSidebarCollapsed" class="nav-text">{{ item.name }}</span>
+              <span v-if="!isSidebarCollapsed" class="nav-text">{{ sidebarLabel(item) }}</span>
               <!-- 移除了右侧的叉叉按钮 -->
             </div>
 
@@ -109,7 +109,7 @@
                       :class="{ 'selected': searchEngine === e.value }"
                       @click.stop="selectEngine(e.value)"
                     >
-                      {{ e.name }}
+                      {{ engineLabel(e) }}
                       <i v-if="searchEngine === e.value" class="fas fa-check check-icon"></i>
                     </div>
                   </div>
@@ -119,17 +119,52 @@
                   v-model="searchInput"
                   @keydown.enter="doSearch"
                   @focus="handleSearchFocus"
-                  placeholder="输入想要搜索的内容..."
+                  :placeholder="t('home.searchPlaceholder')"
                   class="search-input"
                 />
-                <button @click="doSearch" class="search-btn">搜索</button>
+                <button @click="doSearch" class="search-btn">{{ t('home.searchBtn') }}</button>
               </div>
 
               <!-- 右侧：时间和头像 -->
               <div class="time-wrapper">
                 <div class="time-content">
                   <div class="time-big">{{ currentTime }}</div>
-                  <div class="time-small">今天也要加油哦！</div>
+                  <div class="time-small">{{ t('home.motivate') }}</div>
+                </div>
+                <div class="header-extras">
+                  <el-dropdown trigger="click" @command="onLocaleCommand">
+                    <span class="locale-trigger">{{ locale === 'en' ? 'EN' : '中文' }}</span>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="zh">中文</el-dropdown-item>
+                        <el-dropdown-item command="en">English</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                  <el-dropdown trigger="click" placement="bottom-end" @visible-change="onNotifOpen">
+                    <span class="notif-wrap">
+                      <el-badge :value="notifCount" :hidden="notifCount === 0" :max="99">
+                        <button type="button" class="notif-btn" aria-label="notifications">
+                          <i class="fas fa-bell"></i>
+                        </button>
+                      </el-badge>
+                    </span>
+                    <template #dropdown>
+                      <div class="notif-dropdown">
+                        <div class="notif-head">
+                          <span>{{ t('home.notif') }}</span>
+                          <el-button link type="primary" size="small" @click="markNotifsRead">{{ t('home.markRead') }}</el-button>
+                        </div>
+                        <div v-if="!notifList.length" class="notif-empty">{{ t('home.notifEmpty') }}</div>
+                        <div v-else class="notif-list">
+                          <div v-for="n in notifList.slice(0, 12)" :key="n.id" class="notif-item" :class="{ unread: !n.read }">
+                            <div class="notif-title">{{ n.title }}</div>
+                            <div class="notif-body">{{ n.body }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </el-dropdown>
                 </div>
                 <!-- 头像 -->
                 <div class="avatar-container">
@@ -155,7 +190,7 @@
           <!-- 常用 -->
           <div class="section-container">
             <div class="section-header">
-              <h2 class="section-title-text">常用</h2>
+              <h2 class="section-title-text">{{ t('home.sectionCommon') }}</h2>
             </div>
             <section id="common" class="section-card">
               <div class="grid-layout">
@@ -185,8 +220,8 @@
           <!-- 精选工具 -->
           <div class="section-container">
             <div class="section-header">
-              <h2 class="section-title-text">精选工具</h2>
-              <router-link to="/tools" class="more-btn-small">更多 →</router-link>
+              <h2 class="section-title-text">{{ t('home.sectionTools') }}</h2>
+              <router-link to="/tools" class="more-btn-small">{{ t('home.more') }}</router-link>
             </div>
             <section id="tools" class="section-card">
               <div class="grid-layout">
@@ -214,8 +249,8 @@
           <!-- 课程浏览 -->
           <div class="section-container">
             <div class="section-header">
-              <h2 class="section-title-text">课程浏览</h2>
-              <router-link to="/course" class="more-btn-small">更多 →</router-link>
+              <h2 class="section-title-text">{{ t('home.sectionCourse') }}</h2>
+              <router-link to="/course" class="more-btn-small">{{ t('home.more') }}</router-link>
             </div>
             <section id="course" class="section-card">
               <div class="grid-layout">
@@ -243,8 +278,8 @@
           <!-- 项目情况 -->
           <div class="section-container">
             <div class="section-header">
-              <h2 class="section-title-text">项目情况</h2>
-              <router-link to="/projects" class="more-btn-small">更多 →</router-link>
+              <h2 class="section-title-text">{{ t('home.sectionProjects') }}</h2>
+              <router-link to="/projects" class="more-btn-small">{{ t('home.more') }}</router-link>
             </div>
             <section id="projects" class="section-card">
               <div class="grid-layout">
@@ -279,15 +314,28 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { setAppLocale } from '@/i18n'
 import logoImg from '@/assets/logo.png'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { getImageUrl } from '@/utils/image'
+import {
+  listDemoNotifications,
+  unreadDemoCount,
+  markAllDemoRead,
+  seedDemoNotificationsIfEmpty,
+  startDemoNotificationTicker,
+  stopDemoNotificationTicker
+} from '@/utils/demoNotifications'
+import { tryConnectWsDemo } from '@/utils/wsDemo'
 
 const store = useStore()
 const router = useRouter()
+const { t, locale } = useI18n()
 
 // ========== 从 Vuex Store 获取状态 ==========
 const isLoggedIn = computed(() => store.getters.isLoggedIn)
+const isAdmin = computed(() => store.getters.isAdmin)
 const userInitial = computed(() => store.getters.getUserInitial)
 const user = computed(() => store.state.user)
 
@@ -368,7 +416,43 @@ const course = computed(() => store.getters.course)
 const homeProjects = computed(() => store.getters.homeProjects)
 const visibleSidebarItems = computed(() => store.getters.visibleSidebarItems)
 const engines = computed(() => store.getters.engines)
-const currentEngineName = computed(() => store.getters.currentEngineName)
+const currentEngineName = computed(() => {
+  const e = store.state.home.engines.find(x => x.value === store.state.home.searchEngine)
+  if (!e) return t('home.engineLocal')
+  if (e.value === 'local') return t('home.engineLocal')
+  return e.name
+})
+
+function engineLabel (e) {
+  if (e.value === 'local') return t('home.engineLocal')
+  return e.name
+}
+
+function sidebarLabel (item) {
+  if (item.i18nKey) return t(`sidebar.${item.i18nKey}`)
+  return item.name
+}
+
+const notifCount = ref(0)
+const notifList = ref([])
+
+function refreshNotifs () {
+  notifList.value = listDemoNotifications()
+  notifCount.value = unreadDemoCount()
+}
+
+function onLocaleCommand (cmd) {
+  setAppLocale(cmd)
+}
+
+function onNotifOpen (vis) {
+  if (vis) refreshNotifs()
+}
+
+function markNotifsRead () {
+  markAllDemoRead()
+  refreshNotifs()
+}
 
 // ========== 互动背景相关代码（保留在组件内）==========
 const mainWrapper = ref(null)
@@ -734,7 +818,8 @@ const handleNavItem = (item) => {
 // 关闭所有菜单
 const closeMenus = (e) => {
   if (!e.target.closest('.avatar-btn') &&
-    !e.target.closest('.engine-wrapper')) {
+    !e.target.closest('.engine-wrapper') &&
+    !e.target.closest('.header-extras')) {
     store.dispatch('closeAllMenus')
   }
 }
@@ -742,6 +827,8 @@ const closeMenus = (e) => {
 watch([dropdownOpen, engineMenuOpen], () => {
   // 菜单状态监听
 })
+
+let disposeWsDemo = null
 
 onMounted(async () => {
   // 等待DOM完全加载
@@ -760,6 +847,14 @@ onMounted(async () => {
     store.dispatch('fetchHomeCourses'),
     store.dispatch('fetchHomeProjects')
   ])
+
+  seedDemoNotificationsIfEmpty()
+  refreshNotifs()
+  startDemoNotificationTicker(() => refreshNotifs())
+  const tok = localStorage.getItem('token')
+  if (isAdmin.value && tok) {
+    disposeWsDemo = tryConnectWsDemo(() => refreshNotifs(), tok)
+  }
 
   document.addEventListener('click', closeMenus)
 
@@ -785,6 +880,11 @@ onMounted(async () => {
   // 清理函数
   onUnmounted(() => {
     clearInterval(timer)
+    stopDemoNotificationTicker()
+    if (disposeWsDemo) {
+      disposeWsDemo()
+      disposeWsDemo = null
+    }
     document.removeEventListener('click', closeMenus)
 
     // 清理互动背景
@@ -799,4 +899,72 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 @import '../assets/css/home';
+
+.header-extras {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: 8px;
+}
+.locale-trigger {
+  cursor: pointer;
+  font-size: 13px;
+  color: #606266;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.locale-trigger:hover {
+  background: #f4f4f5;
+}
+.notif-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: #606266;
+  padding: 4px 6px;
+  line-height: 1;
+}
+.notif-dropdown {
+  min-width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.notif-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+.notif-empty {
+  padding: 16px;
+  text-align: center;
+  color: #909399;
+  font-size: 13px;
+}
+.notif-list {
+  border-top: 1px solid #ebeef5;
+}
+.notif-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f5f7fa;
+}
+.notif-item.unread {
+  background: #ecf5ff;
+}
+.notif-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #303133;
+}
+.notif-body {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  line-height: 1.4;
+}
 </style>

@@ -10,12 +10,12 @@
             <i class="fas fa-search search-icon"></i>
             <input
               v-model="searchQuery"
-              @keydown.enter="performSearch"
+              @keydown.enter="submitSearch"
               type="text"
               placeholder="搜索工具、课程、项目..."
               class="search-input"
             />
-            <button @click="performSearch" class="search-button">搜索</button>
+            <button @click="submitSearch" class="search-button">搜索</button>
           </div>
           <div class="search-info">
             <span v-if="isSearching" class="loading-text">
@@ -29,9 +29,44 @@
       </div>
     </div>
 
+    <!-- 统一检索：意图 Tab + 同义词扩展 + 意图识别提示（A01/A02） -->
+    <div v-if="hasSearched && !isSearching" class="intel-bar max-w-[1200px] mx-auto px-1">
+      <div class="intent-tabs">
+        <span class="intent-label">检索范围</span>
+        <el-radio-group v-model="intentScope" size="small" @change="onIntentScopeChange">
+          <el-radio-button label="all">全部</el-radio-button>
+          <el-radio-button label="tools">工具</el-radio-button>
+          <el-radio-button label="courses">课程</el-radio-button>
+          <el-radio-button label="projects">项目</el-radio-button>
+        </el-radio-group>
+      </div>
+      <el-alert
+        v-if="detectedIntent !== 'all' && detectedIntent !== intentScope"
+        type="success"
+        :closable="false"
+        class="mt-3"
+        show-icon
+      >
+        <template #title>
+          <span>系统推断您可能在找：<strong>{{ intentLabel[detectedIntent] }}</strong></span>
+          <el-button link type="primary" class="ml-2" @click="applyDetectedIntent">仅在该范围检索</el-button>
+        </template>
+      </el-alert>
+      <div v-if="expansionChips.length" class="expand-row mt-3">
+        <span class="expand-label">同义词扩展（点击替换关键词）：</span>
+        <el-tag
+          v-for="term in expansionChips"
+          :key="term"
+          class="chip"
+          effect="plain"
+          @click="applyExpansionChip(term)"
+        >{{ term }}</el-tag>
+      </div>
+    </div>
+
     <div class="search-content">
       <!-- 工具搜索结果 -->
-      <section v-if="toolsResults.length > 0" class="results-section">
+      <section v-if="showTools && toolsResults.length > 0" class="results-section">
         <h2 class="section-title">
           <i class="fas fa-tools"></i> 工具资源 ({{ toolsResults.length }})
         </h2>
@@ -62,7 +97,7 @@
       </section>
 
       <!-- 课程搜索结果 -->
-      <section v-if="coursesResults.length > 0" class="results-section">
+      <section v-if="showCourses && coursesResults.length > 0" class="results-section">
         <h2 class="section-title">
           <i class="fas fa-book-open"></i> 课程路线 ({{ coursesResults.length }})
         </h2>
@@ -93,7 +128,7 @@
       </section>
 
       <!-- 项目搜索结果 -->
-      <section v-if="projectsResults.length > 0" class="results-section">
+      <section v-if="showProjects && projectsResults.length > 0" class="results-section">
         <h2 class="section-title">
           <i class="fas fa-project-diagram"></i> 项目展示 ({{ projectsResults.length }})
         </h2>
@@ -140,9 +175,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
+import { detectSearchIntent, expandQueryTerms, INTENT_LABEL } from '@/utils/smartSearch'
 
 const route = useRoute()
 const router = useRouter()
@@ -155,9 +191,24 @@ const toolsResults = ref([])
 const coursesResults = ref([])
 const projectsResults = ref([])
 
+/** all | tools | courses | projects */
+const intentScope = ref('all')
+const detectedIntent = ref('all')
+const expansionChips = ref([])
+
+const intentLabel = INTENT_LABEL
+
+const showTools = computed(() => intentScope.value === 'all' || intentScope.value === 'tools')
+const showCourses = computed(() => intentScope.value === 'all' || intentScope.value === 'courses')
+const showProjects = computed(() => intentScope.value === 'all' || intentScope.value === 'projects')
+
 // 计算总结果数
 const totalResults = computed(() => {
-  return toolsResults.value.length + coursesResults.value.length + projectsResults.value.length
+  let n = 0
+  if (showTools.value) n += toolsResults.value.length
+  if (showCourses.value) n += coursesResults.value.length
+  if (showProjects.value) n += projectsResults.value.length
+  return n
 })
 
 // 生成默认图标
@@ -220,7 +271,7 @@ const getProjectImage = (project) => {
   return generateDefaultIcon(project.name || project.title, 'project')
 }
 
-// 执行搜索
+// 由路由驱动；仅拉取结果，不在此函数内改路由（避免与 watch 循环）
 const performSearch = async () => {
   const query = searchQuery.value.trim()
   if (!query) return
@@ -231,30 +282,60 @@ const performSearch = async () => {
   coursesResults.value = []
   projectsResults.value = []
 
+  detectedIntent.value = detectSearchIntent(query)
+  expansionChips.value = expandQueryTerms(query)
+
   try {
-    // 并行搜索工具、课程、项目
-    const [toolsRes, coursesRes, projectsRes] = await Promise.allSettled([
-      store.dispatch('searchTools', { query }),
-      store.dispatch('searchCourses', { query }),
-      store.dispatch('searchProjects', { query })
-    ])
-
-    if (toolsRes.status === 'fulfilled') {
-      toolsResults.value = toolsRes.value || []
+    const jobs = []
+    if (showTools.value) {
+      jobs.push(store.dispatch('searchTools', { query }).then((r) => { toolsResults.value = r || [] }))
     }
-
-    if (coursesRes.status === 'fulfilled') {
-      coursesResults.value = coursesRes.value || []
+    if (showCourses.value) {
+      jobs.push(store.dispatch('searchCourses', { query }).then((r) => { coursesResults.value = r || [] }))
     }
-
-    if (projectsRes.status === 'fulfilled') {
-      projectsResults.value = projectsRes.value || []
+    if (showProjects.value) {
+      jobs.push(store.dispatch('searchProjects', { query }).then((r) => { projectsResults.value = r || [] }))
     }
+    await Promise.allSettled(jobs)
   } catch (error) {
     console.error('搜索失败:', error)
   } finally {
     isSearching.value = false
   }
+}
+
+function submitSearch () {
+  const query = searchQuery.value.trim()
+  if (!query) return
+  router.replace({
+    path: '/search',
+    query: {
+      q: query,
+      ...(intentScope.value === 'all' ? {} : { type: intentScope.value })
+    }
+  })
+}
+
+function onIntentScopeChange () {
+  if (searchQuery.value.trim()) {
+    router.replace({
+      path: '/search',
+      query: {
+        q: searchQuery.value.trim(),
+        ...(intentScope.value === 'all' ? {} : { type: intentScope.value })
+      }
+    })
+  }
+}
+
+function applyDetectedIntent () {
+  intentScope.value = detectedIntent.value
+  submitSearch()
+}
+
+function applyExpansionChip (term) {
+  searchQuery.value = term
+  submitSearch()
 }
 
 // 格式化教师名字（处理数组格式）
@@ -280,21 +361,25 @@ const goToProjectDetail = (id) => {
   router.push({ name: 'ProjectDetail', params: { id: String(id) } })
 }
 
-// 监听路由参数变化
-watch(() => route.query.q, (newQuery) => {
-  if (newQuery) {
-    searchQuery.value = newQuery
-    performSearch()
-  }
-}, { immediate: true })
-
-// 组件挂载时，如果有搜索参数，执行搜索
-onMounted(() => {
-  if (route.query.q) {
-    searchQuery.value = route.query.q
-    performSearch()
-  }
-})
+// 监听路由参数变化（关键词 + 检索范围）
+watch(
+  () => ({ q: route.query.q, type: route.query.type }),
+  (nv) => {
+    if (nv.q) {
+      searchQuery.value = String(nv.q)
+    }
+    const t = nv.type
+    if (t === 'tools' || t === 'courses' || t === 'projects') {
+      intentScope.value = t
+    } else {
+      intentScope.value = 'all'
+    }
+    if (nv.q) {
+      void performSearch()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style lang="scss" scoped>
@@ -555,6 +640,43 @@ onMounted(() => {
     font-size: 14px;
     color: #9ca3af;
   }
+}
+
+.intel-bar {
+  margin-bottom: 20px;
+}
+.intent-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+.intent-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+.expand-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+}
+.expand-label {
+  font-size: 12px;
+  color: #64748b;
+}
+.chip {
+  cursor: pointer;
 }
 </style>
 

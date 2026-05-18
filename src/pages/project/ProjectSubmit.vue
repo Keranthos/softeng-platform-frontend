@@ -302,10 +302,20 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { useStore } from 'vuex'  // 修改：使用 Vuex
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectTags } from '@/data/project/projectTags'
 import { HttpManager } from '@/api'
 import { getImageUrl } from '@/utils/image'
+import { scanFields, scanUrl } from '@/utils/contentSafety'
+import { findSimilarTitles } from '@/utils/stringSimilarity'
+import { appendJournalEvent } from '@/utils/eventJournal'
+
+function normalizeSearchArray (res) {
+  if (!res) return []
+  if (Array.isArray(res)) return res
+  if (res.data && Array.isArray(res.data)) return res.data
+  return []
+}
 
 const store = useStore()
 const isAuthenticated = computed(() => store.getters.isLoggedIn)
@@ -555,6 +565,36 @@ const submit = async () => {
       ElMessage.warning('请先登录')
       return
     }
+
+    const safety = scanFields([
+      { label: '名称', text: form.name },
+      { label: '简介', text: form.description },
+      { label: '详情', text: form.details }
+    ])
+    const gh = scanUrl(form.githubUrl)
+    const demo = form.demoUrl ? scanUrl(form.demoUrl) : { ok: true, reasons: [] }
+    if (!safety.ok || !gh.ok || !demo.ok) {
+      ElMessage.error([...safety.reasons, ...gh.reasons, ...demo.reasons].join('；'))
+      return
+    }
+
+    if ((form.name || '').trim().length >= 2) {
+      try {
+        const res = await HttpManager.searchProjects({ keyword: form.name.trim(), page_size: 40 })
+        const list = normalizeSearchArray(res)
+        const sims = findSimilarTitles(form.name, list, { threshold: 0.74, max: 5 })
+        if (sims.length) {
+          await ElMessageBox.confirm(
+            `检索到名称相近的已有项目：${sims.map(s => s.name).join('、')}。是否仍要提交？`,
+            '相似标题提示',
+            { type: 'warning', confirmButtonText: '仍要提交', cancelButtonText: '返回修改' }
+          )
+        }
+      } catch (e) {
+        if (e === 'cancel') return
+      }
+    }
+
     isSubmitting.value = true
 
     // 准备数据，映射前端字段到后端API期望的格式
@@ -586,6 +626,12 @@ const submit = async () => {
     // 后端响应格式：{ message: "...", data: {...} }
     if (response && response.message) {
       ElMessage.success(response.message || '提交成功，等待管理员审核')
+
+      appendJournalEvent({
+        kind: 'submit',
+        title: '提交项目',
+        detail: form.name
+      })
 
       // 重置表单
       Object.keys(form).forEach(key => {

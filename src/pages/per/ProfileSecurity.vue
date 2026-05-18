@@ -297,6 +297,16 @@
             />
           </el-form-item>
 
+          <el-form-item label="当前密码" prop="currentPassword">
+            <el-input
+              v-model="emailForm.currentPassword"
+              type="password"
+              placeholder="请输入登录密码以验证身份"
+              show-password
+              autocomplete="current-password"
+            />
+          </el-form-item>
+
           <el-form-item label="新邮箱" prop="newEmail">
             <el-input
               v-model="emailForm.newEmail"
@@ -400,6 +410,7 @@ const passwordForm = ref({
 const emailForm = ref({
   currentEmail: 'user@example.com',
   newEmail: '',
+  currentPassword: '',
   code: ''
 })
 
@@ -437,6 +448,10 @@ const passwordRules = {
 }
 
 const emailRules = {
+  currentPassword: [
+    { required: true, message: '请输入当前登录密码', trigger: 'blur' },
+    { min: 6, message: '密码长度至少6位', trigger: 'blur' }
+  ],
   newEmail: [
     { required: true, message: '请输入新邮箱地址', trigger: 'blur' },
     { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
@@ -475,6 +490,7 @@ const resetEmailForm = () => {
   emailForm.value = {
     currentEmail: currentEmail.value,
     newEmail: '',
+    currentPassword: '',
     code: ''
   }
   codeCountdown.value = 0
@@ -488,18 +504,31 @@ const submitPasswordChange = async () => {
     passwordLoading.value = true
 
     const token = store.state.token || localStorage.getItem('token')
+    const u = store.state.user || {}
     const response = await HttpManager.updatePassword(
       {
+        name: u.username || '',
+        email: u.email || '',
         new_password: passwordForm.value.newPassword,
-        code: '123456' // 这里应该是从验证码接口获取的
+        code: '123456' // 后端暂未校验真实验证码，占位与接口契约一致
       },
       token
     )
 
-    if (response.islogin) {
+    const ok =
+      response &&
+      (response.user ||
+        (typeof response.message === 'string' &&
+          /password updated|successfully/i.test(response.message)))
+    if (ok) {
       ElMessage.success('密码修改成功')
       passwordDialogVisible.value = false
       lastPasswordChange.value = new Date().toLocaleDateString('zh-CN')
+      try {
+        await store.dispatch('fetchUserProfile')
+      } catch (e) {
+        void e
+      }
     } else {
       ElMessage.error(response.message || '密码修改失败')
     }
@@ -548,18 +577,31 @@ const submitEmailChange = async () => {
     emailLoading.value = true
 
     const token = store.state.token || localStorage.getItem('token')
+    const u = store.state.user || {}
     const response = await HttpManager.updateEmail(
       {
-        password: '当前密码', // 这里应该让用户输入当前密码
+        name: u.username || '',
+        password: emailForm.value.currentPassword,
+        new_email: emailForm.value.newEmail,
         code: emailForm.value.code
       },
       token
     )
 
-    if (response.islogin) {
+    const ok =
+      response &&
+      (response.user ||
+        (typeof response.message === 'string' &&
+          /email updated|successfully/i.test(response.message)))
+    if (ok) {
       ElMessage.success('邮箱修改成功')
       currentEmail.value = emailForm.value.newEmail
       emailDialogVisible.value = false
+      try {
+        await store.dispatch('fetchUserProfile')
+      } catch (e) {
+        void e
+      }
     } else {
       ElMessage.error(response.message || '邮箱修改失败')
     }

@@ -266,6 +266,22 @@
       </div>
     </header>
 
+    <div v-if="isLoading" class="text-center py-24 text-gray-400">
+      <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
+      <p>课程加载中...</p>
+    </div>
+    <div v-else-if="loadError" class="text-center py-24 px-6">
+      <i class="fas fa-plug text-3xl text-amber-500 mb-4"></i>
+      <p class="text-gray-700 mb-2">{{ loadError }}</p>
+      <button
+        type="button"
+        class="mt-4 px-6 py-2 rounded-full bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors"
+        @click="retryFetchCourses"
+      >
+        重试加载
+      </button>
+    </div>
+    <template v-else>
     <div class="flex justify-center mb-8">
       <div class="flex flex-wrap gap-2 bg-white/50 backdrop-blur-sm p-1.5 rounded-full border border-white/60 shadow-sm">
         <button
@@ -384,6 +400,7 @@
         </button>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -415,6 +432,7 @@ const filterRef = ref(null)
 const teacherFilterSearch = ref('')
 const courses = ref([])
 const isLoading = ref(false)
+const loadError = ref('')
 const allTeachers = computed(() => [...new Set(courses.value.map(c => c.teacher).filter(Boolean))])
 const activeType = ref('全部')
 const courseTypes = ['全部', '公必', '专必', '专选', '公选']
@@ -733,6 +751,7 @@ const reverseSemesterMap = Object.entries(semesterMap).reduce((acc, [k, v]) => {
 // 从后端获取课程列表
 const fetchCourses = async () => {
   try {
+    loadError.value = ''
     isLoading.value = true
     const response = await HttpManager.getCourses({ limit: 1000, cursor: 0 })
     console.log('[CourseList] 后端返回的完整响应:', response)
@@ -771,13 +790,21 @@ const fetchCourses = async () => {
       })))
     } else {
       console.warn('[CourseList] 响应格式不正确:', response)
+      courses.value = []
+      loadError.value = '服务器返回数据格式异常，请稍后重试'
     }
   } catch (error) {
     console.error('获取课程列表失败:', error)
-    ElMessage.error('获取课程列表失败，请稍后重试')
+    courses.value = []
+    loadError.value = '无法加载课程列表，请检查网络或稍后重试'
+    ElMessage.error(loadError.value)
   } finally {
     isLoading.value = false
   }
+}
+
+const retryFetchCourses = () => {
+  fetchCourses()
 }
 
 const groupedCourses = computed(() => {

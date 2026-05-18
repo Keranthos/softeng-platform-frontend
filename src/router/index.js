@@ -4,6 +4,8 @@ import ToolsList from '@/pages/tool/ToolsList.vue'
 import ToolSubmit from '@/pages/tool/ToolSubmit.vue'
 import { createRouter, createWebHistory, RouterView } from 'vue-router'
 import store from '@/store'
+import { recordRouteVisit } from '@/utils/sessionAnalytics'
+import { appendJournalEvent } from '@/utils/eventJournal'
 
 const constantRoutes = [
   {
@@ -175,7 +177,57 @@ const constantRoutes = [
         path: 'audit',
         name: 'Audit',
         component: () => import('@/pages/check/audit.vue'),
-        meta: { title: '审核中心', requiresAuth: true }
+        meta: { title: '审核中心', requiresAuth: true, requiresAdmin: true }
+      }
+    ]
+  },
+  // 数据洞察 / 运营与智能能力（仅管理员，见路由守卫 meta.requiresAdmin）
+  {
+    path: '/insights',
+    component: RouterView,
+    meta: { requiresAdmin: true },
+    children: [
+      {
+        path: 'dashboard',
+        name: 'OpsDashboard',
+        component: () => import('@/pages/insights/OperationsDashboard.vue'),
+        meta: { title: '运营数据大屏' }
+      },
+      {
+        path: 'knowledge-graph',
+        name: 'KnowledgeGraph',
+        component: () => import('@/pages/insights/KnowledgeGraph.vue'),
+        meta: { title: '资源关联图谱' }
+      },
+      {
+        path: 'telemetry',
+        name: 'TelemetryPanel',
+        component: () => import('@/pages/insights/TelemetryPanel.vue'),
+        meta: { title: '可观测性' }
+      },
+      {
+        path: 'long-list',
+        name: 'LongListDemo',
+        component: () => import('@/pages/insights/LongListDemo.vue'),
+        meta: { title: '长列表演示' }
+      },
+      {
+        path: 'rag-agent',
+        name: 'RagAgent',
+        component: () => import('@/pages/insights/RagAgent.vue'),
+        meta: { title: 'RAG 学习助手' }
+      },
+      {
+        path: 'session-persona',
+        name: 'SessionPersona',
+        component: () => import('@/pages/insights/SessionPersona.vue'),
+        meta: { title: '会话画像' }
+      },
+      {
+        path: 'event-timeline',
+        name: 'EventTimeline',
+        component: () => import('@/pages/insights/EventTimeline.vue'),
+        meta: { title: '事件时间线' }
       }
     ]
   }
@@ -221,6 +273,23 @@ router.beforeEach(async (to, from, next) => {
     }
   }
   
+  // 管理员专属（洞察页、审核中心等）
+  if (to.matched.some(record => record.meta.requiresAdmin)) {
+    if (!token) {
+      next({
+        path: '/',
+        query: { redirect: to.fullPath }
+      })
+      return
+    }
+    const role = store.state.user.role
+    const isAdmin = role === 'admin' || role === 'superadmin'
+    if (!isAdmin) {
+      next({ path: '/home' })
+      return
+    }
+  }
+
   // 检查路由是否需要认证
   if (to.matched.some(record => record.meta.requiresAuth)) {
     // 检查是否有token
@@ -238,6 +307,16 @@ router.beforeEach(async (to, from, next) => {
     // 不需要认证的路由，直接放行（如 /home, /tools 等，允许游客访问）
     next()
   }
+})
+
+router.afterEach((to) => {
+  recordRouteVisit(to)
+  const title = to.meta && to.meta.title
+  appendJournalEvent({
+    kind: 'browse',
+    title: title ? `浏览：${title}` : `浏览：${to.path}`,
+    detail: to.fullPath
+  })
 })
 
 export default router

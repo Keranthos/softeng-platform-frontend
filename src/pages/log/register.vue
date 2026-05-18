@@ -213,7 +213,12 @@ const handleRegister = () => {
 
     try {
       const res = await HttpManager.SignUp(params)
-      if (res.code === 1) {
+      const msg = res.message || ''
+      if (
+        res.code === 1 ||
+        res.code === 200 ||
+        /registration successful|注册成功/i.test(msg)
+      ) {
         ElMessage.success('注册成功！即将跳转登录')
         setTimeout(() => router.push({ name: 'Login' }), 2000)
       } else {
