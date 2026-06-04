@@ -292,7 +292,7 @@ const DRAFT_KEY = 'TOOL_SUBMIT_DRAFT'; // 表单草稿 Key
 
 const store = useStore()
 
-const isAuthenticated = computed(() => store.getters.isAuthenticated)
+const isAuthenticated = computed(() => store.getters.isLoggedIn)
 
 // 一、响应式数据定义
 const form = reactive({

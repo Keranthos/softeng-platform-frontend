@@ -298,7 +298,7 @@ const toolsLoading = computed(() => store.getters.toolsLoading)
 const userInfo = computed(() => store.state.user)
 const activeFilters = computed(() => store.state.tools.activeFilters)
 const searchResults = computed(() => store.state.tools.searchResults)
-const isAuthenticated = computed(() => store.getters.isAuthenticated)
+const isAuthenticated = computed(() => store.getters.isLoggedIn)
 
 // ==================== 1. 搜索引擎配置 ====================
 const engines = [

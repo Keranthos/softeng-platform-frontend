@@ -398,7 +398,7 @@ const workflowStep = ref(2)
 // 用户状态（从 store 获取）
 const isAuthenticated = computed(() => {
   try {
-    return store.getters.isAuthenticated || false
+    return store.getters.isLoggedIn
   } catch (e) {
     return false
   }

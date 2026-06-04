@@ -111,6 +111,7 @@ export default createStore({
     // 设置登录状态
     setLoginIn(state, isLogin) {
       state.isLogin = isLogin
+      state.tools.isAuthenticated = isLogin
     },
 
     // 设置用户信息
@@ -1385,13 +1386,14 @@ export default createStore({
             commit('setUserInfo', {})
             localStorage.removeItem('token')
           } else {
-            // 其他错误（网络错误、超时等），不清除登录状态，只更新UI状态
+            commit('setLoginIn', false)
             commit('setToolsIsAuthenticated', false)
             commit('setUserInfo', {})
           }
           return null
         }
       } else {
+        commit('setLoginIn', false)
         commit('setToolsIsAuthenticated', false)
       }
     },
@@ -1586,9 +1588,9 @@ export default createStore({
     disableToolSubmit: (state) => state.tools.disableToolSubmit,
 
     // 从 toolsStore.js 添加的额外 getters
-    toolsIsAuthenticated: (state) => state.tools.isAuthenticated,
+    toolsIsAuthenticated: (state) => state.isLogin,
 
-    // 工具模块的认证状态别名
-    isAuthenticated: (state) => state.tools.isAuthenticated
+    // 与 isLoggedIn 保持一致，避免工具页与课程/项目页登录态不同步
+    isAuthenticated: (state) => state.isLogin
   }
 })

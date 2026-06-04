@@ -623,16 +623,9 @@ const handleSearch = () => {
   }
 
   if (searchEngine.value === 'local') {
-    // 模拟本站搜索加载效果
-    isSearching.value = true
-    hasSearched.value = false // 先重置结果状态
-
-    setTimeout(() => {
-      isSearching.value = false
-      hasSearched.value = true
-      // 滚动到顶部
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }, 500)
+    isSearching.value = false
+    hasSearched.value = true
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   } else {
     // 外部搜索
     let url = ''

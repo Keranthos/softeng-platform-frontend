@@ -287,7 +287,7 @@ const store = useStore()  // 替换 toolsStore
 // eslint-disable-next-line no-unused-vars
 const user = toRef(store.state, 'user')
 
-const isAuthenticated = computed(() => store.getters.isAuthenticated)
+const isAuthenticated = computed(() => store.getters.isLoggedIn)
 
 // 一、变量声明
 // 1. 工具详情相关变量
