@@ -1,12 +1,10 @@
 <template>
-  <div class="path-wrap">
+  <div v-if="hasPath" class="path-wrap">
     <h3 class="path-title">
       <span class="bar" />
       学习路径与里程碑
     </h3>
-    <p class="path-desc">
-      按课程生成的<strong>静态</strong>教学周次示意（哈希分班），用于报告中的「学习路径 / 甘特轻量版」说明。
-    </p>
+    <p class="path-desc">{{ pathNote }}</p>
     <div class="gantt-row">
       <div
         v-for="(w, i) in weeks"
@@ -31,6 +29,11 @@
       </el-timeline-item>
     </el-timeline>
   </div>
+  <div v-else class="path-empty">
+    <i class="fas fa-route text-gray-300"></i>
+    <p>暂未配置本课程的学习路径与里程碑。</p>
+    <p class="hint">平台仅展示经人工编写的路径，不会用其他课程的模板自动填充。</p>
+  </div>
 </template>
 
 <script setup>
@@ -38,47 +41,51 @@ import { computed } from 'vue'
 
 const props = defineProps({
   courseId: { type: String, default: '' },
-  courseTitle: { type: String, default: '' }
+  courseTitle: { type: String, default: '' },
+  /** 后端 learningPath：{ weeks, milestones, note, activeIndex } */
+  path: { type: Object, default: null }
 })
 
-function hashSeed (s) {
-  let h = 0
-  const str = String(s || '0')
-  for (let i = 0; i < str.length; i++) {
-    h = (h << 5) - h + str.charCodeAt(i)
-    h |= 0
+function normalizePath (raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const weeks = Array.isArray(raw.weeks) ? raw.weeks : []
+  const milestones = Array.isArray(raw.milestones) ? raw.milestones : []
+  if (weeks.length === 0 || milestones.length === 0) return null
+  return {
+    note: raw.note || '',
+    activeIndex: raw.activeIndex ?? raw.active_index,
+    weeks: weeks.map((w) => ({
+      label: w.label || '',
+      weight: Number(w.weight) > 0 ? Number(w.weight) : 1
+    })),
+    milestones: milestones.map((m) => ({
+      time: m.time || '',
+      title: m.title || '',
+      body: m.body || '',
+      type: m.type || 'primary'
+    }))
   }
-  return Math.abs(h)
 }
 
-const activeIdx = computed(() => hashSeed(props.courseId) % 4)
+const pathData = computed(() => normalizePath(props.path))
 
-const weeks = computed(() => {
-  const seed = hashSeed(props.courseId)
-  const base = [
-    { label: 'W1–2 导论', weight: 1 },
-    { label: 'W3–5 需求', weight: 1.2 },
-    { label: 'W6–8 设计', weight: 1.1 },
-    { label: 'W9–12 实现', weight: 1.4 },
-    { label: 'W13–16 测试', weight: 1 },
-    { label: 'W17 交付', weight: 0.8 }
-  ]
-  if (seed % 2 === 1) {
-    base[2].label = 'W6–8 架构'
-  }
-  return base
+const hasPath = computed(() => pathData.value !== null)
+
+const pathNote = computed(() => {
+  const note = pathData.value?.note
+  if (note && String(note).trim()) return String(note).trim()
+  return '以下为课程推荐学习节奏，供复习规划参考，不代表教务处正式课表。'
 })
 
-const milestones = computed(() => {
-  const t = props.courseTitle || '本课程'
-  return [
-    { time: '第 2 周', title: '软件过程与敏捷', body: `在「${t}」中建立过程观：迭代、持续集成概念预习。`, type: 'primary' },
-    { time: '第 5 周', title: '需求工程', body: '用例、用户故事与验收标准；与后续设计衔接。', type: 'success' },
-    { time: '第 9 周', title: '设计原则', body: 'SOLID、模块边界；可结合平台项目案例自学。', type: 'warning' },
-    { time: '第 14 周', title: '测试与质量', body: '单元测试、静态分析工具链（可链至本站工具区）。', type: 'danger' },
-    { time: '第 17 周', title: '里程碑答辩', body: '交付物检查、文档与演示视频。', type: 'info' }
-  ]
+const activeIdx = computed(() => {
+  const n = Number(pathData.value?.activeIndex)
+  if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+  return Math.max(0, milestones.value.length - 2)
 })
+
+const weeks = computed(() => pathData.value?.weeks || [])
+
+const milestones = computed(() => pathData.value?.milestones || [])
 </script>
 
 <style scoped>
@@ -86,6 +93,25 @@ const milestones = computed(() => {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px dashed #e5e7eb;
+}
+.path-empty {
+  margin-top: 1rem;
+  padding: 1.25rem 1rem;
+  border-top: 1px dashed #e5e7eb;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+.path-empty i {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+.path-empty .hint {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: #9ca3af;
 }
 .path-title {
   display: flex;

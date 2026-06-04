@@ -70,16 +70,59 @@
           </div>
           <nav class="nav-list">
             <div
-              v-for="item in visibleSidebarItems"
+              v-for="item in primarySidebarItems"
               :key="item.id"
               :class="['nav-item', { active: homeActiveSection === item.id }]"
               @click="handleNavItem(item)"
             >
               <i :class="['fas nav-icon', item.icon, !isSidebarCollapsed ? 'with-margin' : '']"></i>
               <span v-if="!isSidebarCollapsed" class="nav-text">{{ sidebarLabel(item) }}</span>
-              <!-- 移除了右侧的叉叉按钮 -->
             </div>
 
+            <template v-if="isAdmin && adminSidebarItems.length">
+              <div v-if="!isSidebarCollapsed" class="nav-divider" />
+
+              <el-dropdown
+                v-if="isSidebarCollapsed"
+                trigger="click"
+                placement="right-start"
+                @command="handleAdminNavCommand"
+              >
+                <div class="nav-item nav-item-admin" title="管理工具">
+                  <i class="fas nav-icon fa-shield-halved"></i>
+                </div>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-for="item in adminSidebarItems"
+                      :key="item.id"
+                      :command="item.route"
+                    >
+                      <i :class="['fas', item.icon, 'mr-2']" />{{ sidebarLabel(item) }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+
+              <template v-else>
+                <div class="nav-group-toggle" @click="toggleAdminNav">
+                  <i class="fas nav-icon fa-shield-halved with-margin"></i>
+                  <span class="nav-text">管理工具</span>
+                  <i :class="['fas fa-chevron-down group-chevron', { open: adminNavOpen }]"></i>
+                </div>
+                <div v-show="adminNavOpen" class="nav-sublist">
+                  <div
+                    v-for="item in adminSidebarItems"
+                    :key="item.id"
+                    :class="['nav-item nav-item-sub', { active: isAdminRouteActive(item) }]"
+                    @click="handleNavItem(item)"
+                  >
+                    <i :class="['fas nav-icon', item.icon, 'with-margin']"></i>
+                    <span class="nav-text">{{ sidebarLabel(item) }}</span>
+                  </div>
+                </div>
+              </template>
+            </template>
           </nav>
         </aside>
 
@@ -132,12 +175,14 @@
                   <div class="time-small">{{ t('home.motivate') }}</div>
                 </div>
                 <div class="header-extras">
-                  <el-dropdown trigger="click" @command="onLocaleCommand">
-                    <span class="locale-trigger">{{ locale === 'en' ? 'EN' : '中文' }}</span>
+                  <el-dropdown trigger="click" placement="bottom-end" @command="onLocaleCommand">
+                    <span class="locale-trigger" :title="t('home.lang')">
+                      {{ locale === 'en' ? 'EN' : '中' }}
+                    </span>
                     <template #dropdown>
                       <el-dropdown-menu>
-                        <el-dropdown-item command="zh">中文</el-dropdown-item>
-                        <el-dropdown-item command="en">English</el-dropdown-item>
+                        <el-dropdown-item command="zh">{{ t('home.langZh') }}</el-dropdown-item>
+                        <el-dropdown-item command="en">{{ t('home.langEn') }}</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -179,7 +224,7 @@
                   <div v-if="dropdownOpen" class="dropdown-menu">
                     <a v-if="isLoggedIn" href="/profile" class="dropdown-item login-option">个人主页</a>
                     <div v-else class="dropdown-item login-option text-gray-400 cursor-not-allowed opacity-60">个人主页（请先登录）</div>
-                    <a v-if="isLoggedIn" href="/logout" class="dropdown-item login-option">退出登陆</a>
+                    <a v-if="isLoggedIn" href="/logout" class="dropdown-item login-option">退出登录</a>
                     <a v-else href="/" class="dropdown-item login-option">点击登录</a>
                   </div>
                 </div>
@@ -187,32 +232,49 @@
             </div>
           </div>
 
-          <!-- 常用 -->
+          <!-- 常用外链 -->
           <div class="section-container">
             <div class="section-header">
               <h2 class="section-title-text">{{ t('home.sectionCommon') }}</h2>
             </div>
             <section id="common" class="section-card">
               <div class="grid-layout">
-                <a
-                  v-for="(site, i) in commonSites"
-                  :key="i"
-                  :href="site.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="item-card-small"
-                >
-                  <img 
-                    :src="getImageUrl(site.icon) || generateDefaultIcon(site.name, 'common')" 
-                    :alt="site.name" 
-                    class="item-icon-small"
-                    @error="handleImageError($event, site.name, 'common')"
-                  />
-                  <div class="item-content-small">
-                    <h3 class="item-name-small">{{ site.name }}</h3>
-                    <p class="item-desc-small">{{ site.desc }}</p>
-                  </div>
-                </a>
+                <template v-for="(site, i) in commonSites" :key="'common-' + i">
+                  <a
+                    v-if="isExternalUrl(site.url)"
+                    :href="site.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(site.icon, site.name, 'common')"
+                      :alt="site.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, site.name, 'common')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ site.name }}</h3>
+                      <p class="item-desc-small">{{ site.desc }}</p>
+                    </div>
+                  </a>
+                  <router-link
+                    v-else
+                    :to="site.url"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(site.icon, site.name, 'common')"
+                      :alt="site.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, site.name, 'common')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ site.name }}</h3>
+                      <p class="item-desc-small">{{ site.desc }}</p>
+                    </div>
+                  </router-link>
+                </template>
               </div>
             </section>
           </div>
@@ -224,25 +286,45 @@
               <router-link to="/tools" class="more-btn-small">{{ t('home.more') }}</router-link>
             </div>
             <section id="tools" class="section-card">
-              <div class="grid-layout">
-                <router-link
-                  v-for="(tool, i) in homeTools"
-                  :key="i"
-                  :to="tool.url"
-                  class="item-card-small"
-                >
-                  <img 
-                    :src="tool.icon || generateDefaultIcon(tool.name, 'tool')" 
-                    :alt="tool.name" 
-                    class="item-icon-small"
-                    @error="handleImageError($event, tool.name, 'tool')"
-                  />
-                  <div class="item-content-small">
-                    <h3 class="item-name-small">{{ tool.name }}</h3>
-                    <p class="item-desc-small">{{ tool.desc }}</p>
-                  </div>
-                </router-link>
+              <div v-if="homeTools.length" class="grid-layout">
+                <template v-for="(tool, i) in homeTools" :key="'tool-' + i">
+                  <a
+                    v-if="isExternalUrl(tool.url)"
+                    :href="tool.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(tool.icon, tool.name, 'tool')"
+                      :alt="tool.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, tool.name, 'tool')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ tool.name }}</h3>
+                      <p class="item-desc-small">{{ tool.desc }}</p>
+                    </div>
+                  </a>
+                  <router-link
+                    v-else
+                    :to="tool.url"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(tool.icon, tool.name, 'tool')"
+                      :alt="tool.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, tool.name, 'tool')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ tool.name }}</h3>
+                      <p class="item-desc-small">{{ tool.desc }}</p>
+                    </div>
+                  </router-link>
+                </template>
               </div>
+              <p v-else class="section-empty">暂无工具数据，请确认后端已启动并已导入演示数据。</p>
             </section>
           </div>
 
@@ -253,25 +335,45 @@
               <router-link to="/course" class="more-btn-small">{{ t('home.more') }}</router-link>
             </div>
             <section id="course" class="section-card">
-              <div class="grid-layout">
-                <router-link
-                  v-for="(c, i) in course"
-                  :key="i"
-                  :to="c.url"
-                  class="item-card-small"
-                >
-                  <img 
-                    :src="c.icon || generateDefaultIcon(c.name, 'course')" 
-                    :alt="c.name" 
-                    class="item-icon-small"
-                    @error="handleImageError($event, c.name, 'course')"
-                  />
-                  <div class="item-content-small">
-                    <h3 class="item-name-small">{{ c.name }}</h3>
-                    <p class="item-desc-small">{{ c.desc }}</p>
-                  </div>
-                </router-link>
+              <div v-if="course.length" class="grid-layout">
+                <template v-for="(c, i) in course" :key="'course-' + i">
+                  <a
+                    v-if="isExternalUrl(c.url)"
+                    :href="c.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(c.icon, c.name, 'course')"
+                      :alt="c.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, c.name, 'course')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ c.name }}</h3>
+                      <p class="item-desc-small">{{ c.desc }}</p>
+                    </div>
+                  </a>
+                  <router-link
+                    v-else
+                    :to="c.url"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(c.icon, c.name, 'course')"
+                      :alt="c.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, c.name, 'course')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ c.name }}</h3>
+                      <p class="item-desc-small">{{ c.desc }}</p>
+                    </div>
+                  </router-link>
+                </template>
               </div>
+              <p v-else class="section-empty">暂无课程数据。</p>
             </section>
           </div>
 
@@ -282,25 +384,45 @@
               <router-link to="/projects" class="more-btn-small">{{ t('home.more') }}</router-link>
             </div>
             <section id="projects" class="section-card">
-              <div class="grid-layout">
-                <router-link
-                  v-for="(p, i) in homeProjects"
-                  :key="i"
-                  :to="p.url"
-                  class="item-card-small"
-                >
-                  <img 
-                    :src="p.icon || generateDefaultIcon(p.name, 'project')" 
-                    :alt="p.name" 
-                    class="item-icon-small"
-                    @error="handleImageError($event, p.name, 'project')"
-                  />
-                  <div class="item-content-small">
-                    <h3 class="item-name-small">{{ p.name }}</h3>
-                    <p class="item-desc-small">{{ p.desc }}</p>
-                  </div>
-                </router-link>
+              <div v-if="homeProjects.length" class="grid-layout">
+                <template v-for="(p, i) in homeProjects" :key="'project-' + i">
+                  <a
+                    v-if="isExternalUrl(p.url)"
+                    :href="p.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(p.icon, p.name, 'project')"
+                      :alt="p.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, p.name, 'project')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ p.name }}</h3>
+                      <p class="item-desc-small">{{ p.desc }}</p>
+                    </div>
+                  </a>
+                  <router-link
+                    v-else
+                    :to="p.url"
+                    class="item-card-small"
+                  >
+                    <img
+                      :src="resolveItemIcon(p.icon, p.name, 'project')"
+                      :alt="p.name"
+                      class="item-icon-small"
+                      @error="handleImageError($event, p.name, 'project')"
+                    />
+                    <div class="item-content-small">
+                      <h3 class="item-name-small">{{ p.name }}</h3>
+                      <p class="item-desc-small">{{ p.desc }}</p>
+                    </div>
+                  </router-link>
+                </template>
               </div>
+              <p v-else class="section-empty">暂无项目数据。</p>
             </section>
           </div>
 
@@ -313,24 +435,22 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useStore } from 'vuex'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { setAppLocale } from '@/i18n'
 import logoImg from '@/assets/logo.png'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { getImageUrl } from '@/utils/image'
 import {
-  listDemoNotifications,
-  unreadDemoCount,
-  markAllDemoRead,
-  seedDemoNotificationsIfEmpty,
-  startDemoNotificationTicker,
-  stopDemoNotificationTicker
-} from '@/utils/demoNotifications'
-import { tryConnectWsDemo } from '@/utils/wsDemo'
+  fetchUserNotifications,
+  unreadNotificationCount,
+  markAllNotificationsRead,
+  clearLegacyDemoNotifications
+} from '@/utils/userNotifications'
 
 const store = useStore()
 const router = useRouter()
+const route = useRoute()
 const { t, locale } = useI18n()
 
 // ========== 从 Vuex Store 获取状态 ==========
@@ -378,21 +498,35 @@ const generateDefaultIcon = (name, type = 'tool') => {
   return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
 }
 
+function isExternalUrl (url) {
+  return /^https?:\/\//i.test(String(url || '').trim())
+}
+
+function resolveItemIcon (icon, name, type = 'tool') {
+  if (icon) {
+    const resolved = getImageUrl(icon)
+    return resolved || icon
+  }
+  return generateDefaultIcon(name, type)
+}
+
 // 处理图片加载错误
 const handleImageError = (event, name, type = 'tool') => {
-  const currentSrc = event.target.src
-  
+  const target = event?.target
+  if (!target) return
+
+  const currentSrc = target.src || ''
+
   // 如果已经是默认图标（SVG），不再重试，避免无限循环
   if (currentSrc.startsWith('data:image/svg+xml')) {
     return
   }
-  
-  // 使用名称生成默认图标
+
   const defaultIcon = generateDefaultIcon(name, type)
-  
-  if (event.target.src !== defaultIcon) {
-    event.target.src = defaultIcon
+  if (target.src !== defaultIcon) {
+    target.src = defaultIcon
   }
+  target.onerror = null
 }
 
 // 首页状态
@@ -414,7 +548,8 @@ const commonSites = computed(() => store.getters.commonSites)
 const homeTools = computed(() => store.getters.homeTools)
 const course = computed(() => store.getters.course)
 const homeProjects = computed(() => store.getters.homeProjects)
-const visibleSidebarItems = computed(() => store.getters.visibleSidebarItems)
+const primarySidebarItems = computed(() => store.getters.primarySidebarItems)
+const adminSidebarItems = computed(() => store.getters.adminSidebarItems)
 const engines = computed(() => store.getters.engines)
 const currentEngineName = computed(() => {
   const e = store.state.home.engines.find(x => x.value === store.state.home.searchEngine)
@@ -429,28 +564,60 @@ function engineLabel (e) {
 }
 
 function sidebarLabel (item) {
-  if (item.i18nKey) return t(`sidebar.${item.i18nKey}`)
+  if (item.i18nKey) {
+    const key = `sidebar.${item.i18nKey}`
+    const label = t(key)
+    if (label !== key) return label
+  }
   return item.name
+}
+
+const ADMIN_NAV_KEY = 'home_admin_nav_open'
+const adminNavOpen = ref(
+  typeof localStorage !== 'undefined' && localStorage.getItem(ADMIN_NAV_KEY) === '1'
+)
+
+function toggleAdminNav () {
+  adminNavOpen.value = !adminNavOpen.value
+  try {
+    localStorage.setItem(ADMIN_NAV_KEY, adminNavOpen.value ? '1' : '0')
+  } catch (e) {
+    void e
+  }
+}
+
+function isAdminRouteActive (item) {
+  return item.route && route.path.startsWith(item.route)
+}
+
+function handleAdminNavCommand (path) {
+  if (path) router.push(path)
 }
 
 const notifCount = ref(0)
 const notifList = ref([])
+let notifRefreshTimer = null
 
-function refreshNotifs () {
-  notifList.value = listDemoNotifications()
-  notifCount.value = unreadDemoCount()
-}
-
-function onLocaleCommand (cmd) {
-  setAppLocale(cmd)
+async function refreshNotifs () {
+  if (!isLoggedIn.value) {
+    notifList.value = []
+    notifCount.value = 0
+    return
+  }
+  notifList.value = await fetchUserNotifications({ isAdmin: isAdmin.value })
+  notifCount.value = unreadNotificationCount(notifList.value)
 }
 
 function onNotifOpen (vis) {
   if (vis) refreshNotifs()
 }
 
+function onLocaleCommand (cmd) {
+  setAppLocale(cmd)
+}
+
 function markNotifsRead () {
-  markAllDemoRead()
+  markAllNotificationsRead(notifList.value)
   refreshNotifs()
 }
 
@@ -828,8 +995,6 @@ watch([dropdownOpen, engineMenuOpen], () => {
   // 菜单状态监听
 })
 
-let disposeWsDemo = null
-
 onMounted(async () => {
   // 等待DOM完全加载
   await nextTick()
@@ -848,13 +1013,11 @@ onMounted(async () => {
     store.dispatch('fetchHomeProjects')
   ])
 
-  seedDemoNotificationsIfEmpty()
-  refreshNotifs()
-  startDemoNotificationTicker(() => refreshNotifs())
-  const tok = localStorage.getItem('token')
-  if (isAdmin.value && tok) {
-    disposeWsDemo = tryConnectWsDemo(() => refreshNotifs(), tok)
-  }
+  clearLegacyDemoNotifications()
+  await refreshNotifs()
+  notifRefreshTimer = window.setInterval(() => {
+    if (isLoggedIn.value) refreshNotifs()
+  }, 90000)
 
   document.addEventListener('click', closeMenus)
 
@@ -880,10 +1043,9 @@ onMounted(async () => {
   // 清理函数
   onUnmounted(() => {
     clearInterval(timer)
-    stopDemoNotificationTicker()
-    if (disposeWsDemo) {
-      disposeWsDemo()
-      disposeWsDemo = null
+    if (notifRefreshTimer) {
+      clearInterval(notifRefreshTimer)
+      notifRefreshTimer = null
     }
     document.removeEventListener('click', closeMenus)
 
@@ -905,6 +1067,13 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   margin-right: 8px;
+}
+.section-empty {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  color: #909399;
+  font-size: 14px;
 }
 .locale-trigger {
   cursor: pointer;
@@ -966,5 +1135,49 @@ onMounted(async () => {
   color: #909399;
   margin-top: 4px;
   line-height: 1.4;
+}
+
+.nav-divider {
+  height: 1px;
+  margin: 10px 12px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.nav-group-toggle {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  user-select: none;
+  transition: color 0.15s, background 0.15s;
+  border-radius: 8px;
+  margin: 0 6px;
+}
+.nav-group-toggle:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.group-chevron {
+  margin-left: auto;
+  font-size: 11px;
+  transition: transform 0.2s;
+}
+.group-chevron.open {
+  transform: rotate(180deg);
+}
+.nav-sublist {
+  padding-left: 4px;
+}
+.nav-item-sub {
+  padding-left: 28px !important;
+  font-size: 13px;
+}
+.nav-item-admin {
+  justify-content: center;
+}
+.mr-2 {
+  margin-right: 8px;
 }
 </style>

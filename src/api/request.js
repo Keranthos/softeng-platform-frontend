@@ -91,13 +91,7 @@ axios.interceptors.response.use(
           )
           
           if (!isAuthEndpoint && !isPublicGetEndpoint && !isPublicPostEndpoint) {
-            // 只有在需要认证的接口返回401时，才清除登录状态
-            // 公开接口的401可能是服务器错误，不应该触发登出
-            localStorage.removeItem('token')
-            // 清除store中的登录状态
-            store.commit('setToken', '')
-            store.commit('setLoginIn', false)
-            store.commit('setToolsIsAuthenticated', false)
+            store.commit('clearUserInfo')
             // 使用 fullPath 字符串，而不是 currentRoute 对象
             const currentPath = router.currentRoute.value?.fullPath || '/home'
             // 避免在登录页时重复重定向
@@ -170,6 +164,21 @@ export function postJSON (url, data = {}, config = {}) {
       .catch(err => {
         reject(err)
       })
+  })
+}
+
+/** RAG SSE 流式 POST（返回原始 Response，需自行解析 event-stream） */
+export function postStreamJSON (url, data = {}) {
+  const token = localStorage.getItem('token')
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) headers.Authorization = `Bearer ${token}`
+  const base = axios.defaults.baseURL || ''
+  const fullUrl = url.startsWith('http') ? url : `${String(base).replace(/\/$/, '')}/${url.replace(/^\//, '')}`
+  return fetch(fullUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+    credentials: 'include'
   })
 }
 

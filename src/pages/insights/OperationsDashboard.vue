@@ -2,8 +2,8 @@
   <div class="ops-dashboard">
     <header class="dash-header">
       <div>
-        <h1>资源运营数据大屏</h1>
-        <p class="sub">多源聚合 · 演示数据可对接真实统计接口</p>
+        <h1>资源数据概览</h1>
+        <p class="sub">基于当前库内工具、课程、项目的实时统计</p>
       </div>
       <div class="header-actions">
         <span class="clock">{{ nowText }}</span>
@@ -20,18 +20,13 @@
       <div v-for="k in kpis" :key="k.label" class="kpi-card">
         <div class="kpi-label">{{ k.label }}</div>
         <div class="kpi-value">{{ k.value }}</div>
-        <div class="kpi-trend" :class="k.up ? 'up' : 'down'">
-          <i :class="k.up ? 'fas fa-arrow-trend-up' : 'fas fa-arrow-trend-down'" />
+        <div class="kpi-trend muted-trend">
           {{ k.delta }}
         </div>
       </div>
     </section>
 
-    <div class="chart-grid">
-      <div class="chart-panel">
-        <h3>近 7 日提交与审核量</h3>
-        <div ref="lineRef" class="chart-box" />
-      </div>
+    <div class="chart-grid chart-grid--two">
       <div class="chart-panel">
         <h3>资源类型占比</h3>
         <div ref="pieRef" class="chart-box" />
@@ -40,10 +35,6 @@
         <h3>工具分类 TOP</h3>
         <div ref="barRef" class="chart-box" />
       </div>
-      <div class="chart-panel">
-        <h3>审核通过率趋势</h3>
-        <div ref="areaRef" class="chart-box" />
-      </div>
     </div>
   </div>
 </template>
@@ -51,11 +42,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
+import { HttpManager } from '@/api'
 
-const lineRef = ref(null)
 const pieRef = ref(null)
 const barRef = ref(null)
-const areaRef = ref(null)
 const refreshing = ref(false)
 const nowText = ref('')
 
@@ -63,40 +53,100 @@ let charts = []
 let tickTimer
 
 const kpis = ref([
-  { label: '累计资源条目', value: '—', delta: '周环比 +12%', up: true },
-  { label: '待审核队列', value: '—', delta: '较昨日 -3', up: true },
-  { label: '7 日活跃用户(估)', value: '—', delta: '演示口径', up: true },
-  { label: '平均审核耗时(h)', value: '—', delta: '目标 < 24h', up: true }
+  { label: '累计资源条目', value: '—', delta: '工具 + 课程 + 项目' },
+  { label: '待审核队列', value: '—', delta: '三类待审合计' },
+  { label: '工具资源', value: '—', delta: '已发布条目' },
+  { label: '课程资源', value: '—', delta: '已发布条目' }
 ])
 
-function buildMockSeries () {
-  const days = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', '今日']
-  const submit = [12, 19, 8, 22, 15, 28, 21]
-  const review = [10, 14, 9, 18, 14, 24, 19]
-  return { days, submit, review }
+let stats = {
+  tools: 0,
+  courses: 0,
+  projects: 0,
+  pending: 0,
+  pieData: [],
+  barCategories: [],
+  barValues: []
 }
 
-function initLine () {
-  if (!lineRef.value) return
-  const c = echarts.init(lineRef.value, null, { renderer: 'canvas' })
-  const { days, submit, review } = buildMockSeries()
-  c.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['提交', '完成审核'], textStyle: { color: '#94a3b8' } },
-    grid: { left: 48, right: 24, top: 40, bottom: 32 },
-    xAxis: { type: 'category', data: days, axisLabel: { color: '#94a3b8' } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } }, axisLabel: { color: '#94a3b8' } },
-    series: [
-      { name: '提交', type: 'line', smooth: true, data: submit, areaStyle: { opacity: 0.12 }, itemStyle: { color: '#38bdf8' } },
-      { name: '完成审核', type: 'line', smooth: true, data: review, areaStyle: { opacity: 0.12 }, itemStyle: { color: '#a78bfa' } }
-    ]
-  })
-  charts.push(c)
+function extractList (res) {
+  if (!res) return []
+  if (Array.isArray(res)) return res
+  if (Array.isArray(res.data)) return res.data
+  if (Array.isArray(res.data?.results)) return res.data.results
+  if (Array.isArray(res.results)) return res.results
+  if (Array.isArray(res.courses_agg)) return res.courses_agg
+  return []
+}
+
+function extractTotal (res, fallbackLen) {
+  const t = res?.data?.total ?? res?.total ?? res?.data?.count ?? res?.count
+  return t != null ? Number(t) : fallbackLen
+}
+
+function countToolCategories (tools) {
+  const map = new Map()
+  for (const t of tools) {
+    const cat = t.category || t.catagory || '未分类'
+    map.set(cat, (map.get(cat) || 0) + 1)
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+}
+
+async function loadStats () {
+  const [toolsRes, coursesRes, projectsRes, pTools, pCourses, pProjects] = await Promise.all([
+    HttpManager.getTools({ page_size: 500 }).catch(() => null),
+    HttpManager.getCourses({ limit: 500, cursor: 0 }).catch(() => null),
+    HttpManager.getProjects({ limit: 500 }).catch(() => null),
+    HttpManager.getPendingReviews({ type: 'tools', page: 1, page_size: 1 }).catch(() => null),
+    HttpManager.getPendingReviews({ type: 'courses', page: 1, page_size: 1 }).catch(() => null),
+    HttpManager.getPendingReviews({ type: 'projects', page: 1, page_size: 1 }).catch(() => null)
+  ])
+
+  const tools = extractList(toolsRes)
+  const courses = extractList(coursesRes)
+  const projects = extractList(projectsRes)
+
+  const toolCount = extractTotal(toolsRes, tools.length)
+  const courseCount = extractTotal(coursesRes, courses.length)
+  const projectCount = extractTotal(projectsRes, projects.length)
+  const pending =
+    extractTotal(pTools, 0) +
+    extractTotal(pCourses, 0) +
+    extractTotal(pProjects, 0)
+
+  const topCats = countToolCategories(tools)
+
+  stats = {
+    tools: toolCount,
+    courses: courseCount,
+    projects: projectCount,
+    pending,
+    pieData: [
+      { value: toolCount, name: '工具' },
+      { value: courseCount, name: '课程' },
+      { value: projectCount, name: '项目' }
+    ].filter(d => d.value > 0),
+    barCategories: topCats.map(([name]) => name),
+    barValues: topCats.map(([, count]) => count)
+  }
+
+  kpis.value = [
+    { label: '累计资源条目', value: String(toolCount + courseCount + projectCount), delta: `${toolCount} 工具 · ${courseCount} 课程 · ${projectCount} 项目` },
+    { label: '待审核队列', value: String(pending), delta: pending > 0 ? '有待处理项' : '队列已清空' },
+    { label: '工具资源', value: String(toolCount), delta: '已入库条目' },
+    { label: '课程资源', value: String(courseCount), delta: '已入库条目' }
+  ]
 }
 
 function initPie () {
   if (!pieRef.value) return
   const c = echarts.init(pieRef.value)
+  const data = stats.pieData.length
+    ? stats.pieData
+    : [{ value: 1, name: '暂无数据' }]
   c.setOption({
     tooltip: { trigger: 'item' },
     legend: { bottom: 0, textStyle: { color: '#94a3b8' } },
@@ -106,12 +156,7 @@ function initPie () {
       avoidLabelOverlap: true,
       itemStyle: { borderRadius: 8, borderColor: '#0f172a', borderWidth: 2 },
       label: { color: '#e2e8f0' },
-      data: [
-        { value: 48, name: '工具' },
-        { value: 32, name: '课程' },
-        { value: 26, name: '项目' },
-        { value: 14, name: '其它' }
-      ]
+      data
     }]
   })
   charts.push(c)
@@ -120,18 +165,20 @@ function initPie () {
 function initBar () {
   if (!barRef.value) return
   const c = echarts.init(barRef.value)
+  const categories = stats.barCategories.length ? stats.barCategories : ['暂无分类']
+  const values = stats.barValues.length ? stats.barValues : [0]
   c.setOption({
     tooltip: { trigger: 'axis' },
     grid: { left: 72, right: 16, top: 24, bottom: 24 },
     xAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148,163,184,0.12)' } }, axisLabel: { color: '#94a3b8' } },
     yAxis: {
       type: 'category',
-      data: ['DevOps', '前端', '后端', '移动', '数据', '测试'],
+      data: categories,
       axisLabel: { color: '#94a3b8' }
     },
     series: [{
       type: 'bar',
-      data: [23, 41, 35, 18, 27, 15],
+      data: values,
       itemStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
           { offset: 0, color: '#22d3ee' },
@@ -139,34 +186,6 @@ function initBar () {
         ]),
         borderRadius: [0, 6, 6, 0]
       }
-    }]
-  })
-  charts.push(c)
-}
-
-function initArea () {
-  if (!areaRef.value) return
-  const c = echarts.init(areaRef.value)
-  const days = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7']
-  const rate = [0.72, 0.78, 0.81, 0.76, 0.85, 0.88, 0.91]
-  c.setOption({
-    tooltip: { trigger: 'axis', valueFormatter: (v) => `${(v * 100).toFixed(1)}%` },
-    grid: { left: 48, right: 24, top: 32, bottom: 28 },
-    xAxis: { type: 'category', data: days, axisLabel: { color: '#94a3b8' } },
-    yAxis: {
-      type: 'value',
-      min: 0.5,
-      max: 1,
-      axisLabel: { formatter: (v) => `${(v * 100).toFixed(0)}%`, color: '#94a3b8' },
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.12)' } }
-    },
-    series: [{
-      type: 'line',
-      smooth: true,
-      data: rate,
-      areaStyle: { color: 'rgba(52,211,153,0.25)' },
-      lineStyle: { color: '#34d399', width: 3 },
-      symbolSize: 8
     }]
   })
   charts.push(c)
@@ -185,20 +204,15 @@ function resizeAll () {
 
 async function refreshCharts () {
   refreshing.value = true
-  await new Promise((r) => setTimeout(r, 400))
-  const jitter = () => Math.floor(Math.random() * 6) - 3
-  kpis.value = [
-    { label: '累计资源条目', value: String(1240 + jitter()), delta: '周环比 +12%', up: true },
-    { label: '待审核队列', value: String(18 + jitter()), delta: '较昨日波动', up: jitter() >= 0 },
-    { label: '7 日活跃用户(估)', value: String(320 + jitter() * 5), delta: '演示口径', up: true },
-    { label: '平均审核耗时(h)', value: (8.2 + jitter() * 0.3).toFixed(1), delta: '目标 < 24h', up: jitter() <= 0 }
-  ]
+  try {
+    await loadStats()
+  } catch (e) {
+    console.warn('[dashboard] 刷新统计失败', e)
+  }
   disposeAll()
   await nextTick()
-  initLine()
   initPie()
   initBar()
-  initArea()
   resizeAll()
   refreshing.value = false
 }
@@ -211,17 +225,7 @@ function updateClock () {
 onMounted(async () => {
   updateClock()
   tickTimer = setInterval(updateClock, 1000)
-  await nextTick()
-  initLine()
-  initPie()
-  initBar()
-  initArea()
-  kpis.value = [
-    { label: '累计资源条目', value: '1240', delta: '周环比 +12%', up: true },
-    { label: '待审核队列', value: '18', delta: '较昨日 -3', up: true },
-    { label: '7 日活跃用户(估)', value: '326', delta: '演示口径', up: true },
-    { label: '平均审核耗时(h)', value: '8.4', delta: '目标 < 24h', up: true }
-  ]
+  await refreshCharts()
   window.addEventListener('resize', resizeAll)
 })
 
@@ -288,41 +292,47 @@ onUnmounted(() => {
 .kpi-label {
   font-size: 0.8rem;
   color: #94a3b8;
+  margin-bottom: 6px;
 }
 .kpi-value {
   font-size: 1.75rem;
   font-weight: 700;
-  margin-top: 6px;
-  color: #f8fafc;
+  line-height: 1.2;
 }
-.kpi-trend {
+.muted-trend {
   margin-top: 8px;
   font-size: 0.78rem;
+  color: #64748b;
 }
-.kpi-trend.up { color: #4ade80; }
-.kpi-trend.down { color: #fb7185; }
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-}
-@media (max-width: 1024px) {
-  .chart-grid { grid-template-columns: 1fr; }
 }
 .chart-panel {
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 16px;
-  padding: 14px 16px 8px;
+  border-radius: 14px;
+  padding: 16px 18px 8px;
 }
 .chart-panel h3 {
-  margin: 0 0 8px 4px;
+  margin: 0 0 8px;
   font-size: 0.95rem;
   font-weight: 600;
   color: #cbd5e1;
 }
+.chart-note {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
 .chart-box {
   width: 100%;
-  height: 300px;
+  height: 280px;
+}
+@media (max-width: 960px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

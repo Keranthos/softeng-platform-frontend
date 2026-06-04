@@ -7,9 +7,9 @@
         账户安全
       </h1>
       <div class="security-status">
-        <div class="status-badge high">
-          <i class="fas fa-shield-check"></i>
-          安全等级：高
+        <div class="status-badge">
+          <i class="fas fa-shield-alt"></i>
+          账户安全
         </div>
       </div>
     </div>
@@ -43,7 +43,7 @@
               <div class="info-content">
                 <div class="info-label">密码强度</div>
                 <div class="info-value">
-                  <span class="strength-level high">高强度</span>
+                  <span class="strength-level">—</span>
                 </div>
               </div>
             </div>
@@ -84,7 +84,7 @@
               <div class="email-content">
                 <div class="email-label">验证状态</div>
                 <div class="email-value">
-                  <span class="verification-status verified">已验证</span>
+                  <span class="verification-status">以账号信息为准</span>
                 </div>
               </div>
             </div>

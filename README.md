@@ -1,24 +1,24 @@
-# read
+# 软工资源平台 · 前端
 
-## Project setup
-```
+Vue 3 + Vuex + Element Plus。本地开发默认 http://localhost:3000 ，API 默认 http://localhost:8080。
+
+完整启动步骤见仓库根目录 [`运行说明.md`](../运行说明.md)。
+
+## 开发
+
+```powershell
 npm install
-```
-
-### Compiles and hot-reloads for development
-```
 npm run serve
 ```
 
-### Compiles and minifies for production
-```
+## 配置
+
+复制 `.env.example`；开发环境可用 `.env.development` 设置 `VUE_APP_API_BASE`。
+
+## 构建
+
+```powershell
 npm run build
 ```
 
-### Lints and fixes files
-```
-npm run lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+产物在 `dist/`。

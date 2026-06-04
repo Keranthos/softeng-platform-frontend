@@ -36,10 +36,8 @@
       <!-- 工具信息 -->
       <div class="flex-1 z-10">
         <!-- 工具类型 -->
-        <div class="flex gap-3 mb-4">
-          <span class="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-bold">论文阅读</span>
-          <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">外部工具</span>
-          <span class="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs">科学上网</span>
+        <div v-if="tool.category" class="flex gap-3 mb-4">
+          <span class="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-bold">{{ tool.category }}</span>
         </div>
 
         <h1 class="text-3xl font-bold text-gray-800 mb-4">{{ tool.name }}</h1>
@@ -47,12 +45,6 @@
         <p class="text-gray-600 leading-relaxed mb-6">
           {{ tool.fullDesc }}
         </p>
-
-        <ResourceAiSummary
-          :title="tool.name"
-          :body="tool.instructions || ''"
-          class="mb-6"
-        />
 
         <!-- 工具标签 -->
         <div class="flex items-center gap-4 text-sm text-gray-500 mb-6">
@@ -97,7 +89,7 @@
     />
 
     <!-- 使用说明 -->
-    <div class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-8">
+    <div v-if="tool.instructions && tool.instructions.trim()" class="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-8">
       <h2 class="text-lg font-bold text-[#00a99d] flex items-center gap-2 mb-6">
         <i class="fas fa-info-circle"></i> 使用说明
       </h2>
@@ -282,12 +274,11 @@ import { useStore } from 'vuex'  // 替换 Pinia 导入
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { HttpManager } from '@/api'
 import { predefinedTags } from '@/data/tool/tags'
-import { deleteMockComment, getCommentsByToolId } from '@/data/tool/mockData'
 import detailSkeleton from '@/components/DetailSkeleton.vue'
-import ResourceAiSummary from '@/components/ResourceAiSummary.vue'
 import ResourceRecommendBar from '@/components/ResourceRecommendBar.vue'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { getImageUrl } from '@/utils/image'
+import { matchResourceId } from '@/utils/resourceId'
 
 const router = useRouter()
 const route = useRoute()
@@ -295,7 +286,6 @@ const store = useStore()  // 替换 toolsStore
 
 // eslint-disable-next-line no-unused-vars
 const user = toRef(store.state, 'user')
-console.log('当前用户信息:', user.value)
 
 const isAuthenticated = computed(() => store.getters.isAuthenticated)
 
@@ -400,7 +390,7 @@ const checkCollectionStatus = async (toolId) => {
       ]
     }
     isCollected.value = allCollections.some(item =>
-      (item.resourceId || item.resource_id || item.resourceId) === parseInt(toolId) && 
+      matchResourceId(item.resourceId ?? item.resource_id ?? item.id, toolId) &&
       (item.resourceType || item.resource_type) === 'tool'
     )
   } catch (error) {
@@ -430,12 +420,8 @@ const handleCollect = async () => {
       response = await HttpManager.toggleToolCollection(tool.value.id, 'tool')
     }
 
-    console.log('收藏操作响应:', response)
-
-    // 后端返回格式: { message: "success", data: { iscollected: true/false, collections: number } }
     if (response && (response.message === 'success' || response.code === 200 || response.data)) {
       const data = response.data || response
-      console.log('解析后的数据:', data)
       
       const newIsCollected = data.iscollected !== undefined ? data.iscollected : !isCollected.value
       
@@ -446,19 +432,12 @@ const handleCollect = async () => {
       // 优先使用后端返回的 collections 值（这是数据库中最准确的）
       if (data.collections !== undefined && typeof data.collections === 'number' && data.collections >= 0) {
         tool.value.stars = data.collections
-        console.log('使用后端返回的收藏数:', data.collections)
       } else {
-        // 如果后端没有返回 collections 或值为无效，则根据收藏状态变化来增减
         if (newIsCollected && !previousIsCollected) {
-          // 从未收藏变为已收藏，增加1
           tool.value.stars = previousStars + 1
-          console.log('手动增加收藏数，新值:', tool.value.stars)
         } else if (!newIsCollected && previousIsCollected) {
-          // 从已收藏变为未收藏，减少1
           tool.value.stars = Math.max(0, previousStars - 1)
-          console.log('手动减少收藏数，新值:', tool.value.stars)
         }
-        console.warn('后端未返回有效的 collections 值，使用本地计算:', data.collections)
       }
 
       ElMessage.success(isCollected.value ? '已收藏' : '已取消收藏')
@@ -475,7 +454,6 @@ const handleCollect = async () => {
 }
 // 5. 加载工具详细信息（在onMounted中使用）
 const loadToolDetail = async (id) => {
-  console.log('加载工具详情，ID:', id)
   isLoading.value = true
   // 使用 Vuex mutation
   store.commit('setDisableToolSubmit', true)
@@ -559,6 +537,11 @@ const loadToolDetail = async (id) => {
       isCollected: data.iscollected || false,
       isLiked: data.isliked || false
     }
+    if (data.iscollected !== undefined) {
+      isCollected.value = !!data.iscollected
+    } else if (data.isCollected !== undefined) {
+      isCollected.value = !!data.isCollected
+    }
     isLoading.value = false
 
     // 核心数据加载完成后，显示返回按钮并启用工具提交按钮
@@ -567,8 +550,10 @@ const loadToolDetail = async (id) => {
 
     // 非核心数据后台加载
     // 注意：增加浏览量的逻辑已经在 store 的 getToolDetail action 中处理，这里不需要重复调用
+    const needCollectionCheck = isAuthenticated.value &&
+      data.iscollected === undefined && data.isCollected === undefined
     await Promise.allSettled([
-      isAuthenticated.value ? checkCollectionStatus(id) : Promise.resolve(),
+      needCollectionCheck ? checkCollectionStatus(id) : Promise.resolve(),
       fetchComments(id)
     ])
   } catch (error) {
@@ -630,18 +615,10 @@ const fetchComments = async (toolId) => {
       updatePagination()
     }
   } catch (error) {
-    console.error('获取评论失败，使用模拟数据:', error)
-    // comments.value = []
-
-    // 以下是模拟时使用
-    // API失败时使用模拟数据
-    const mockComments = getCommentsByToolId(parseInt(toolId))
-    comments.value = mockComments.map(comment => ({
-      ...comment, // 创建副本，避免使用同一个对象的引用
-      canDelete: isAuthenticated.value &&
-                (user.value?.id === comment.userId || user.value?.role === 'admin')
-    }))
+    console.error('获取评论失败:', error)
+    comments.value = []
     updatePagination()
+    ElMessage.error('评论加载失败，请稍后重试')
   } finally {
     if (isComponentMounted.value) {
       loadingComments.value = false
@@ -720,19 +697,8 @@ const handleDeleteComment = async (commentId) => {
     }
   } catch (error) {
     if (error !== 'cancel') {
-      // ElMessage.error(error.message || '删除失败')
-
-      // 以下是模拟时使用
-      // API失败时使用模拟数据
-      console.error('删除评论失败，使用模拟数据:', error)
-      deleteMockComment(commentId)
-      // 从列表中移除
-      const index = comments.value.findIndex(c => c.id === commentId)
-      if (index !== -1) {
-        comments.value.splice(index, 1)
-        updatePagination()
-      }
-      ElMessage.success('评论已删除')
+      console.error('删除评论失败:', error)
+      ElMessage.error(error?.message || '删除评论失败')
     }
   }
 }
@@ -911,9 +877,8 @@ onMounted(async () => {
   if (token && (!user.value?.id && !user.value?.username)) {
     try {
       await store.dispatch('initAuth')
-      console.log('用户信息已加载:', user.value)
     } catch (error) {
-      console.warn('初始化用户信息失败:', error)
+      void error
     }
   }
   

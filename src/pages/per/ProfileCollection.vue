@@ -322,13 +322,7 @@ const fetchCollections = async () => {
     }
 
     const response = await HttpManager.getUserCollection()
-    
-    // 调试：打印后端返回的原始数据（使用 JSON.stringify 确保完整输出）
-    console.log('收藏数据后端原始响应:', JSON.stringify(response, null, 2))
-    console.log('收藏数据后端原始响应 (原始对象):', response)
 
-    // 后端返回格式: { message: "success", tools: [...], resources: [...], teaches: [...] }
-    // 或者: { islogin: true, data: { tools: [...], resources: [...], teaches: [...] } }
     let allCollections = []
     
     // 处理不同格式的响应数据
@@ -337,15 +331,6 @@ const fetchCollections = async () => {
       allCollections = [
         ...(response.data.tools?.map(tool => {
           const title = tool.name || tool.resourceName || tool.introduce || '工具'
-          // 调试：打印工具数据
-          console.log('工具原始数据:', { 
-            name: tool.name, 
-            resourceName: tool.resourceName, 
-            tags: tool.tags, 
-            category: tool.category,
-            created_at: tool.created_at,
-            tool 
-          })
           return {
           ...tool,
           type: 'tool',
@@ -368,15 +353,6 @@ const fetchCollections = async () => {
         ...(response.data.resources?.map(resource => {
           // 优先使用 resourceName，然后使用 name，最后使用其他字段
           const title = resource.resourceName || resource.name || resource.projectName || resource.introduce || '项目'
-          // 调试：打印项目数据
-          console.log('项目原始数据:', { 
-            resourceName: resource.resourceName, 
-            name: resource.name, 
-            techStack: resource.techStack, 
-            technologies: resource.technologies,
-            created_at: resource.created_at,
-            resource 
-          })
           return {
           ...resource,
           type: 'project',
@@ -401,14 +377,6 @@ const fetchCollections = async () => {
         ...(response.data.teaches?.map(teach => {
           // 优先使用 resourceName，然后使用 name，最后使用其他字段
           const title = teach.resourceName || teach.name || teach.courseName || teach.introduce || '课程'
-          // 调试：打印课程数据
-          console.log('课程原始数据:', { 
-            resourceName: teach.resourceName, 
-            name: teach.name, 
-            teacher: teach.teacher,
-            created_at: teach.created_at,
-            teach 
-          })
           // 处理 teacher 字段（可能是字符串或数组）
           let teacher = '未知'
           if (Array.isArray(teach.teacher) && teach.teacher.length > 0) {
@@ -440,15 +408,6 @@ const fetchCollections = async () => {
       allCollections = [
         ...((responseData.tools || response.tools)?.map(tool => {
           const title = tool.name || tool.resourceName || tool.introduce || '工具'
-          // 调试：打印工具数据
-          console.log('工具原始数据 (格式2):', { 
-            name: tool.name, 
-            resourceName: tool.resourceName, 
-            tags: tool.tags, 
-            category: tool.category,
-            created_at: tool.created_at,
-            tool 
-          })
           return {
           ...tool,
           type: 'tool',
@@ -471,15 +430,6 @@ const fetchCollections = async () => {
         ...((responseData.resources || response.resources)?.map(resource => {
           // 优先使用 resourceName，然后使用 name，最后使用其他字段
           const title = resource.resourceName || resource.name || resource.projectName || resource.introduce || '项目'
-          // 调试：打印项目数据
-          console.log('项目原始数据 (格式2):', { 
-            resourceName: resource.resourceName, 
-            name: resource.name, 
-            techStack: resource.techStack, 
-            technologies: resource.technologies,
-            created_at: resource.created_at,
-            resource 
-          })
           return {
           ...resource,
           type: 'project',

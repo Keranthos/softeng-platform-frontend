@@ -406,6 +406,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, onActivated } from 'vue'
+import { normalizeSemesterKey } from '@/utils/semesterKey'
 import { useRouter, useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
@@ -754,18 +755,8 @@ const fetchCourses = async () => {
     loadError.value = ''
     isLoading.value = true
     const response = await HttpManager.getCourses({ limit: 1000, cursor: 0 })
-    console.log('[CourseList] 后端返回的完整响应:', response)
-    
+
     if (response && response.courses_agg) {
-      console.log('[CourseList] 原始课程数据（前3个）:', response.courses_agg.slice(0, 3).map(c => ({
-        id: c.id,
-        courseId: c.courseId,
-        name: c.name,
-        collections: c.collections,
-        likes: c.likes,
-        loves: c.loves
-      })))
-      
       // 确保每个课程都有 collections 字段（收藏数）
       courses.value = response.courses_agg.map(course => {
         // 优先使用 collections 字段（从 collections 表实时统计）
@@ -776,18 +767,11 @@ const fetchCourses = async () => {
         
         return {
           ...course,
-          collections: collections,  // 收藏数（从 collections 表实时统计）
-          // likes 和 loves 保持原值（点赞数，不是收藏数）
+          semester: normalizeSemesterKey(course.semester),
+          collections: collections,
           likes: course.likes !== undefined ? course.likes : (course.loves !== undefined ? course.loves : 0)
         }
       })
-      
-      console.log('[CourseList] 处理后的课程数据（前3个）:', courses.value.slice(0, 3).map(c => ({
-        id: c.id,
-        name: c.name,
-        collections: c.collections,
-        likes: c.likes
-      })))
     } else {
       console.warn('[CourseList] 响应格式不正确:', response)
       courses.value = []
@@ -843,7 +827,6 @@ watch(() => route.path, async (newPath, oldPath) => {
   const isToList = newPath === '/course' || newPath === '/course/list' || newPath.startsWith('/course?')
   
   if (isFromDetail && isToList) {
-    console.log('从课程详情页返回，刷新课程列表', { oldPath, newPath })
     await fetchCourses()
   }
 }, { immediate: false })
@@ -854,7 +837,6 @@ onActivated(() => {
   // 如果是从详情页返回，刷新数据
   const currentPath = route.path
   if (currentPath === '/course' || currentPath === '/course/list' || currentPath.startsWith('/course?')) {
-    console.log('课程列表页被激活，刷新数据', { path: currentPath })
     fetchCourses()
   }
 })
@@ -896,17 +878,7 @@ const updateCourseInLocalList = (courseId, collections) => {
     (String(c.courseId) === String(courseId))
   )
   if (course && collections !== undefined) {
-    const oldCollections = course.collections
     course.collections = collections
-    // 如果 likes 字段被用作收藏数显示，也更新它
-    course.likes = collections
-    console.log('已直接更新本地课程数据:', { 
-      id: course.id, 
-      name: course.name, 
-      oldCollections, 
-      newCollections: course.collections,
-      courseId 
-    })
   } else {
     console.warn('未找到要更新的课程:', { courseId, coursesCount: courses.value.length })
   }

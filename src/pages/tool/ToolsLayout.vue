@@ -173,8 +173,6 @@ watch(() => route.name, (newRouteName) => {
     // 进入详情页时，先隐藏返回按钮
     store.commit('setShowBackButton', false)
   } else if (newRouteName === 'ToolSubmit') {
-    // 进入提交页面时，直接显示返回按钮（提交页不需要加载）
-    console.log('进入工具提交页面，显示返回按钮')
     store.commit('setShowBackButton', true)
   } else {
     // 其他页面隐藏返回按钮

@@ -1,10 +1,18 @@
 // store/index.js
 import { createStore } from 'vuex'
 import { HttpManager } from '@/api'
-import { mockProjects } from '@/data/project/mockData'
-import { mockTools } from '@/data/tool/mockData'
 import { predefinedTags } from '@/data/tool/tags'
 import { detectSearchIntent } from '@/utils/smartSearch'
+import {
+  HOME_COMMON_SITES,
+  DEFAULT_HOME_TOOLS,
+  DEFAULT_HOME_COURSES,
+  DEFAULT_HOME_PROJECTS,
+  HOME_SEARCH_ENGINES
+} from '@/data/homeDefaults'
+import { matchResourceId, normalizeResourceId } from '@/utils/resourceId'
+
+const TOOL_VIEW_SESSION_PREFIX = 'softeng_tool_view_'
 
 export default createStore({
   state: {
@@ -35,89 +43,24 @@ export default createStore({
       today: '',
       weekday: '',
       currentTime: '',
-      // 首页数据
-      commonSites: [
-        { name: '微信文件', url: 'https://file.fengfengzhidao.com', icon: '/uploads/images/common/微信文件.jpg', desc: '快速传输文件到设备' },
-        { name: '和风天气', url: 'https://www.qweather.com', icon: '/uploads/images/common/和风天气.png', desc: '实时天气预报服务' },
-        { name: '小红书', url: 'https://www.xiaohongshu.com', icon: '/uploads/images/common/小红书.jpeg', desc: '生活方式分享社区' },
-        { name: '哔哩哔哩', url: 'https://www.bilibili.com', icon: '/uploads/images/common/哔哩哔哩_739519e278e6.ico', desc: '视频弹幕网站' },
-        { name: '知乎', url: 'https://www.zhihu.com', icon: '/uploads/images/common/知乎_2e9c10f8e45e.ico', desc: '高质量问答平台' },
-        { name: '百度翻译', url: 'https://fanyi.baidu.com', icon: '/uploads/images/common/百度翻译.jpeg', desc: '多语言翻译工具' },
-        { name: '淘宝', url: 'https://www.taobao.com', icon: '/uploads/images/common/淘宝_65940af649c6.ico', desc: '在线购物平台' },
-        { name: '抖音', url: 'https://www.douyin.com', icon: '/uploads/images/common/抖音.png', desc: '短视频分享应用' },
-        { name: '京东', url: 'https://www.jd.com', icon: '/uploads/images/common/京东_828c0d051f11.ico', desc: '电商购物网站' },
-        { name: '微博', url: 'https://www.weibo.com', icon: '/uploads/images/common/微博_c4814f45f6c0.ico', desc: '社交媒体平台' }
-      ],
-      tools: [
-        { name: 'DeepL', url: 'https://www.deepl.com', icon: 'https://www.deepl.com/img/logo/deepl-logo-blue.svg', desc: '高精度翻译工具' },
-        { name: 'SmallPDF', url: 'https://smallpdf.com', icon: 'https://smallpdf.com/images/favicon.png', desc: 'PDF 处理在线工具' },
-        { name: 'Canvas', url: 'https://www.canva.com', icon: 'https://static.canva.com/static/images/favicon-96x96.png', desc: '在线设计平台' },
-        { name: 'Figma', url: 'https://www.figma.com', icon: 'https://static.figma.com/uploads/logo.png', desc: 'UI/UX 设计工具' },
-        { name: 'GitHub', url: 'https://github.com', icon: 'https://github.githubassets.com/favicons/favicon.png', desc: '代码托管平台' },
-        { name: 'Excalibur', url: 'https://excalidraw.com', icon: 'https://excalidraw.com/favicon.ico', desc: '手绘风格绘图' },
-        { name: 'ProcessOn', url: 'https://www.processon.com', icon: 'https://www.processon.com/favicon.ico', desc: '在线流程图工具' },
-        { name: 'Wormhole', url: 'https://wormhole.app', icon: 'https://wormhole.app/favicon.ico', desc: '安全文件共享' },
-        { name: 'PhotoKit', url: 'https://www.photokit.com', icon: 'https://www.photokit.com/favicon.ico', desc: '在线照片编辑' },
-        { name: 'VirScan', url: 'https://www.virscan.org', icon: 'https://www.virscan.org/favicon.ico', desc: '病毒扫描工具' }
-      ],
-      course: [
-        { name: '慕课网', url: 'https://www.imooc.com', icon: 'https://www.imooc.com/favicon.ico', desc: 'IT技能学习平台' },
-        { name: 'B站课堂', url: 'https://www.bilibili.com/cheese', icon: 'https://www.bilibili.com/favicon.ico', desc: '视频课程学习' },
-        { name: 'Coursera', url: 'https://www.coursera.org', icon: 'https://www.coursera.org/favicon.ico', desc: '在线大学课程' },
-        { name: '网易云课堂', url: 'https://study.163.com', icon: 'https://study.163.com/favicon.ico', desc: '职业技能培训' },
-        { name: '腾讯课堂', url: 'https://ke.qq.com', icon: 'https://ke.qq.com/favicon.ico', desc: '在线教育平台' },
-        { name: '极客时间', url: 'https://time.geekbang.org', icon: 'https://time.geekbang.org/favicon.ico', desc: '技术学习社区' },
-        { name: '实验楼', url: 'https://www.shiyanlou.com', icon: 'https://www.shiyanlou.com/favicon.ico', desc: '在线编程实验' },
-        { name: '菜鸟教程', url: 'https://www.runoob.com', icon: 'https://www.runoob.com/favicon.ico', desc: '编程语言教程' },
-        { name: 'MDN', url: 'https://developer.mozilla.org', icon: 'https://developer.mozilla.org/favicon.ico', desc: 'Web开发文档' },
-        { name: 'W3School', url: 'https://www.w3school.com.cn', icon: 'https://www.w3school.com.cn/favicon.ico', desc: 'Web技术教程' }
-      ],
-      projects: [
-        { name: '项目管理', url: '/projects', icon: 'https://fakeicon.com/project.svg', desc: '管理所有项目' },
-        { name: '任务看板', url: '/kanban', icon: 'https://fakeicon.com/kanban.svg', desc: '可视化任务跟踪' },
-        { name: '代码仓库', url: '/repo', icon: 'https://fakeicon.com/repo.svg', desc: '代码存储与协作' },
-        { name: '文档中心', url: '/docs', icon: 'https://fakeicon.com/docs.svg', desc: '项目文档库' },
-        { name: '统计报表', url: '/report', icon: 'https://fakeicon.com/chart.svg', desc: '数据分析报告' },
-        { name: '成员管理', url: '/members', icon: 'https://fakeicon.com/team.svg', desc: '团队成员设置' },
-        { name: '文件共享', url: '/files', icon: 'https://fakeicon.com/folder.svg', desc: '安全文件交换' },
-        { name: '会议记录', url: '/meeting', icon: 'https://fakeicon.com/note.svg', desc: '会议纪要管理' },
-        { name: '反馈收集', url: '/feedback', icon: 'https://fakeicon.com/message.svg', desc: '用户反馈系统' },
-        { name: '设置', url: '/settings', icon: 'https://fakeicon.com/setting.svg', desc: '项目配置中心' }
-      ],
+      // 首页数据（API 优先；无数据时使用外链/默认列表）
+      commonSites: [...HOME_COMMON_SITES],
+      tools: [...DEFAULT_HOME_TOOLS],
+      course: [...DEFAULT_HOME_COURSES],
+      projects: [...DEFAULT_HOME_PROJECTS],
       reviewItems: [
-        { name: '待审用户', url: '/admin/review/users', icon: 'https://fakeicon.com/review-user.svg', desc: '审核新注册用户' },
-        { name: '内容审核', url: '/admin/review/content', icon: 'https://fakeicon.com/review-content.svg', desc: '检查用户上传内容' },
-        { name: '举报处理', url: '/admin/review/reports', icon: 'https://fakeicon.com/report.svg', desc: '处理用户举报' },
-        { name: '敏感词库', url: '/admin/review/words', icon: 'https://fakeicon.com/filter.svg', desc: '管理敏感词汇' },
-        { name: '日志审计', url: '/admin/review/logs', icon: 'https://fakeicon.com/log.svg', desc: '查看系统日志' },
-        { name: '封禁列表', url: '/admin/review/ban', icon: 'https://fakeicon.com/ban.svg', desc: '管理封禁用户' },
-        { name: '权限调整', url: '/admin/review/roles', icon: 'https://fakeicon.com/role.svg', desc: '调整用户权限' },
-        { name: '系统通知', url: '/admin/review/notice', icon: 'https://fakeicon.com/notice.svg', desc: '发送系统公告' },
-        { name: '备份恢复', url: '/admin/review/backup', icon: 'https://fakeicon.com/backup.svg', desc: '数据备份与恢复' },
-        { name: '安全中心', url: '/admin/review/security', icon: 'https://fakeicon.com/shield.svg', desc: '系统安全设置' }
+        { name: '审核中心', url: '/check/audit', icon: '', desc: '工具/课程/项目审核' }
       ],
       sidebarItems: [
-        { id: 'common', name: '常用', icon: 'fa-star', i18nKey: 'common' },
-        { id: 'tools', name: '精选工具', icon: 'fa-tools', i18nKey: 'tools' },
-        { id: 'course', name: '课程浏览', icon: 'fa-book-open', i18nKey: 'course' },
-        { id: 'projects', name: '项目情况', icon: 'fa-project-diagram', i18nKey: 'projects' },
-        { id: 'dashboard', name: '运营大屏', icon: 'fa-chart-line', route: '/insights/dashboard', i18nKey: 'dashboard', adminOnly: true },
-        { id: 'knowledge', name: '关联图谱', icon: 'fa-circle-nodes', route: '/insights/knowledge-graph', i18nKey: 'knowledge', adminOnly: true },
-        { id: 'telemetry', name: '可观测性', icon: 'fa-gauge-high', route: '/insights/telemetry', i18nKey: 'telemetry', adminOnly: true },
-        { id: 'longlist', name: '长列表', icon: 'fa-list-ul', route: '/insights/long-list', i18nKey: 'longlist', adminOnly: true },
-        { id: 'ragagent', name: 'RAG 助手', icon: 'fa-robot', route: '/insights/rag-agent', i18nKey: 'ragagent', adminOnly: true },
-        { id: 'persona', name: '会话画像', icon: 'fa-user-clock', route: '/insights/session-persona', i18nKey: 'persona', adminOnly: true },
-        { id: 'timeline', name: '事件时间线', icon: 'fa-clock-rotate-left', route: '/insights/event-timeline', i18nKey: 'timeline', adminOnly: true },
-        { id: 'audit', name: '审核中心', icon: 'fa-gavel', adminOnly: true, route: '/check/audit', i18nKey: 'audit' }
+        { id: 'common', name: '常用', icon: 'fa-star', i18nKey: 'common', group: 'main' },
+        { id: 'tools', name: '精选工具', icon: 'fa-tools', i18nKey: 'tools', group: 'main' },
+        { id: 'course', name: '课程浏览', icon: 'fa-book-open', i18nKey: 'course', group: 'main' },
+        { id: 'projects', name: '项目情况', icon: 'fa-project-diagram', i18nKey: 'projects', group: 'main' },
+        { id: 'audit', name: '审核中心', icon: 'fa-gavel', route: '/check/audit', i18nKey: 'audit', adminOnly: true, group: 'admin' },
+        { id: 'dashboard', name: '数据概览', icon: 'fa-chart-line', route: '/insights/dashboard', i18nKey: 'dashboard', adminOnly: true, group: 'admin' },
+        { id: 'knowledge', name: '关联图谱', icon: 'fa-circle-nodes', route: '/insights/knowledge-graph', i18nKey: 'knowledge', adminOnly: true, group: 'admin' }
       ],
-      engines: [
-        { name: '本站', value: 'local' },
-        { name: '百度', value: 'https://www.baidu.com/s?wd=' },
-        { name: '搜狗', value: 'https://www.sogou.com/web?query=' },
-        { name: 'Google', value: 'https://www.google.com/search?q=' },
-        { name: 'Bing', value: 'https://cn.bing.com/search?q=' },
-        { name: '知乎', value: 'https://www.zhihu.com/search?q=' }
-      ]
+      engines: [...HOME_SEARCH_ENGINES]
     },
 
     // ============ 项目状态 ============
@@ -156,12 +99,10 @@ export default createStore({
         sort: '最多浏览'
       },
       currentToolDetail: null,
-      disableToolSubmit: true,
-      showBackButton: false,  // 新增：专门控制返回按钮显示
-      // 从 toolsStore.js 添加的额外状态
-      // isAuthenticated: !!localStorage.getItem('token'), // 直接从 localStorage 检查 token
-      isAuthenticated: true, // 模拟时使用，后续需要删除
-      tagsByCategory: {} // 缓存标签分组数据
+      disableToolSubmit: false,
+      showBackButton: false,
+      isAuthenticated: !!localStorage.getItem('token'),
+      tagsByCategory: {}
     }
   },
 
@@ -221,7 +162,8 @@ export default createStore({
           id: `custom-${Date.now()}-${randomStr}`,
           name: item.name,
           icon: item.icon,
-          custom: true
+          custom: true,
+          group: 'main'
         });
       }
     },
@@ -362,15 +304,10 @@ export default createStore({
       if (state.home.courses && Array.isArray(state.home.courses)) {
         const course = state.home.courses.find(c => (c.id === courseId || c.courseId === courseId || c.course_id === courseId))
         if (course) {
-          // 优先使用 collections 字段（收藏数）
           if (collections !== undefined) {
             course.collections = collections
-            // 如果 likes 字段被用作收藏数显示，也更新它
-            course.likes = collections
           } else if (likes !== undefined) {
-            // 兼容旧代码，如果只传了 likes
             course.likes = likes
-            course.collections = likes
           }
           if (isCollected !== undefined) {
             course.iscollected = isCollected
@@ -656,7 +593,8 @@ export default createStore({
     },
 
     // 获取首页精选工具（从工具资源中获取浏览量最高的10个）
-    async fetchHomeTools({ commit, state }) {
+    async fetchHomeTools (context) {
+      const { commit } = context
       try {
         const response = await HttpManager.getTools({
           page_size: 100 // 获取足够多的数据以便排序
@@ -692,43 +630,11 @@ export default createStore({
 
           commit('setHomeTools', sortedTools)
           return sortedTools
-        } else {
-          // 如果响应格式不正确或数据为空，使用默认数据
-          console.warn('获取首页精选工具失败或数据为空，使用默认数据', response)
-          // 确保使用默认数据（如果state中已有默认数据，则不需要更新）
-          if (!state.home.tools || state.home.tools.length === 0) {
-            // 如果默认数据也被清空了，重新设置默认数据
-            const defaultTools = [
-              { name: 'DeepL', url: 'https://www.deepl.com', icon: 'https://www.deepl.com/img/logo/deepl-logo-blue.svg', desc: '高精度翻译工具' },
-              { name: 'SmallPDF', url: 'https://smallpdf.com', icon: 'https://smallpdf.com/images/favicon.png', desc: 'PDF 处理在线工具' },
-              { name: 'Canvas', url: 'https://www.canva.com', icon: 'https://static.canva.com/static/images/favicon-96x96.png', desc: '在线设计平台' },
-              { name: 'Figma', url: 'https://www.figma.com', icon: 'https://static.figma.com/uploads/logo.png', desc: 'UI/UX 设计工具' },
-              { name: 'GitHub', url: 'https://github.com', icon: 'https://github.githubassets.com/favicons/favicon.png', desc: '代码托管平台' },
-              { name: 'Excalibur', url: 'https://excalidraw.com', icon: 'https://excalidraw.com/favicon.ico', desc: '手绘风格绘图' },
-              { name: 'ProcessOn', url: 'https://www.processon.com', icon: 'https://www.processon.com/favicon.ico', desc: '在线流程图工具' },
-              { name: 'Wormhole', url: 'https://wormhole.app', icon: 'https://wormhole.app/favicon.ico', desc: '安全文件共享' },
-              { name: 'PhotoKit', url: 'https://www.photokit.com', icon: 'https://www.photokit.com/favicon.ico', desc: '在线照片编辑' },
-              { name: 'VirScan', url: 'https://www.virscan.org', icon: 'https://www.virscan.org/favicon.ico', desc: '病毒扫描工具' }
-            ]
-            commit('setHomeTools', defaultTools)
-          }
         }
+        commit('setHomeTools', [...DEFAULT_HOME_TOOLS])
       } catch (error) {
         console.error('获取首页精选工具失败:', error)
-        // API调用失败，使用默认数据
-        const defaultTools = [
-          { name: 'DeepL', url: 'https://www.deepl.com', icon: 'https://www.deepl.com/img/logo/deepl-logo-blue.svg', desc: '高精度翻译工具' },
-          { name: 'SmallPDF', url: 'https://smallpdf.com', icon: 'https://smallpdf.com/images/favicon.png', desc: 'PDF 处理在线工具' },
-          { name: 'Canvas', url: 'https://www.canva.com', icon: 'https://static.canva.com/static/images/favicon-96x96.png', desc: '在线设计平台' },
-          { name: 'Figma', url: 'https://www.figma.com', icon: 'https://static.figma.com/uploads/logo.png', desc: 'UI/UX 设计工具' },
-          { name: 'GitHub', url: 'https://github.com', icon: 'https://github.githubassets.com/favicons/favicon.png', desc: '代码托管平台' },
-          { name: 'Excalibur', url: 'https://excalidraw.com', icon: 'https://excalidraw.com/favicon.ico', desc: '手绘风格绘图' },
-          { name: 'ProcessOn', url: 'https://www.processon.com', icon: 'https://www.processon.com/favicon.ico', desc: '在线流程图工具' },
-          { name: 'Wormhole', url: 'https://wormhole.app', icon: 'https://wormhole.app/favicon.ico', desc: '安全文件共享' },
-          { name: 'PhotoKit', url: 'https://www.photokit.com', icon: 'https://www.photokit.com/favicon.ico', desc: '在线照片编辑' },
-          { name: 'VirScan', url: 'https://www.virscan.org', icon: 'https://www.virscan.org/favicon.ico', desc: '病毒扫描工具' }
-        ]
-        commit('setHomeTools', defaultTools)
+        commit('setHomeTools', [...DEFAULT_HOME_TOOLS])
       }
     },
 
@@ -773,25 +679,31 @@ export default createStore({
                 icon = course.icon
               }
               
+              const cid = course.id || course.courseId || course.course_id
+              const teacherLabel = Array.isArray(course.teacher)
+                ? course.teacher.filter(Boolean).join('、')
+                : (course.teacher || '暂无教师信息')
               return {
                 name: course.name || course.title || '未命名课程',
-                url: `/course/detail/${course.id || course.courseId}`, // 使用内部路由
-                icon: icon, // 如果为空，将在模板中使用默认图片
-                desc: course.teacher || '暂无教师信息'
+                url: cid ? `/course/detail/${cid}` : '/course/list',
+                icon: icon,
+                desc: teacherLabel
               }
             })
 
           commit('setHomeCourses', sortedCourses)
           return sortedCourses
         }
+        commit('setHomeCourses', [...DEFAULT_HOME_COURSES])
       } catch (error) {
         console.error('获取首页课程浏览失败:', error)
-        // 保持默认数据，不更新
+        commit('setHomeCourses', [...DEFAULT_HOME_COURSES])
       }
     },
 
     // 获取首页项目情况（从项目展示中获取浏览量最高的10个）
-    async fetchHomeProjects({ commit, state }) {
+    async fetchHomeProjects (context) {
+      const { commit } = context
       try {
         const response = await HttpManager.getProjects({
           limit: 100 // 获取足够多的数据以便排序
@@ -833,44 +745,11 @@ export default createStore({
 
           commit('setHomeProjects', sortedProjects)
           return sortedProjects
-        } else {
-          // 如果响应格式不正确或数据为空，使用默认数据
-          console.warn('获取首页项目情况失败或数据为空，使用默认数据', response)
-          // 确保使用默认数据（如果state中已有默认数据，则不需要更新）
-          if (!state.home.projects || state.home.projects.length === 0) {
-            // 如果默认数据也被清空了，重新设置默认数据
-            // 注意：默认项目的URL指向功能页面，不是项目详情页
-            const defaultProjects = [
-              { name: '项目管理', url: '/projects', icon: 'https://fakeicon.com/project.svg', desc: '管理所有项目' },
-              { name: '任务看板', url: '/kanban', icon: 'https://fakeicon.com/kanban.svg', desc: '可视化任务跟踪' },
-              { name: '代码仓库', url: '/repo', icon: 'https://fakeicon.com/repo.svg', desc: '代码存储与协作' },
-              { name: '文档中心', url: '/docs', icon: 'https://fakeicon.com/docs.svg', desc: '项目文档库' },
-              { name: '统计报表', url: '/report', icon: 'https://fakeicon.com/chart.svg', desc: '数据分析报告' },
-              { name: '成员管理', url: '/members', icon: 'https://fakeicon.com/team.svg', desc: '团队成员设置' },
-              { name: '文件共享', url: '/files', icon: 'https://fakeicon.com/folder.svg', desc: '安全文件交换' },
-              { name: '会议记录', url: '/meeting', icon: 'https://fakeicon.com/note.svg', desc: '会议纪要管理' },
-              { name: '反馈收集', url: '/feedback', icon: 'https://fakeicon.com/message.svg', desc: '用户反馈系统' },
-              { name: '设置', url: '/settings', icon: 'https://fakeicon.com/setting.svg', desc: '项目配置中心' }
-            ]
-            commit('setHomeProjects', defaultProjects)
-          }
         }
+        commit('setHomeProjects', [...DEFAULT_HOME_PROJECTS])
       } catch (error) {
         console.error('获取首页项目情况失败:', error)
-        // API调用失败，使用默认数据
-        const defaultProjects = [
-          { name: '项目管理', url: '/projects', icon: 'https://fakeicon.com/project.svg', desc: '管理所有项目' },
-          { name: '任务看板', url: '/kanban', icon: 'https://fakeicon.com/kanban.svg', desc: '可视化任务跟踪' },
-          { name: '代码仓库', url: '/repo', icon: 'https://fakeicon.com/repo.svg', desc: '代码存储与协作' },
-          { name: '文档中心', url: '/docs', icon: 'https://fakeicon.com/docs.svg', desc: '项目文档库' },
-          { name: '统计报表', url: '/report', icon: 'https://fakeicon.com/chart.svg', desc: '数据分析报告' },
-          { name: '成员管理', url: '/members', icon: 'https://fakeicon.com/team.svg', desc: '团队成员设置' },
-          { name: '文件共享', url: '/files', icon: 'https://fakeicon.com/folder.svg', desc: '安全文件交换' },
-          { name: '会议记录', url: '/meeting', icon: 'https://fakeicon.com/note.svg', desc: '会议纪要管理' },
-          { name: '反馈收集', url: '/feedback', icon: 'https://fakeicon.com/message.svg', desc: '用户反馈系统' },
-          { name: '设置', url: '/settings', icon: 'https://fakeicon.com/setting.svg', desc: '项目配置中心' }
-        ]
-        commit('setHomeProjects', defaultProjects)
+        commit('setHomeProjects', [...DEFAULT_HOME_PROJECTS])
       }
     },
 
@@ -954,72 +833,43 @@ export default createStore({
 
     // ============ 项目相关 ============
     // 获取项目列表
-    async fetchProjects({ commit, state }, { params = {}, useMock = false } = {}) {
+    async fetchProjects({ commit, state }, { params = {} } = {}) {
       commit('setProjectsLoading', true)
 
       try {
-        if (useMock) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-          commit('setProjectsList', mockProjects)
-          commit('setProjectsCategories', [...new Set(mockProjects.map(p => p.category))])
-          commit('setProjectsPagination', { total: mockProjects.length })
-        } else {
-          const response = await HttpManager.getProjects({
-            page: state.projects.pagination.page,
-            limit: state.projects.pagination.limit,
-            ...params
+        const response = await HttpManager.getProjects({
+          page: state.projects.pagination.page,
+          limit: state.projects.pagination.limit,
+          ...params
+        })
+
+        const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+        const projectsData = response?.data || response?.data?.list || []
+
+        if (isSuccess && Array.isArray(projectsData)) {
+          const mappedProjects = projectsData.map(project => {
+            const collectionsValue = (project.collections !== undefined && project.collections !== null)
+              ? project.collections
+              : 0
+            // eslint-disable-next-line no-unused-vars
+            const { loves, stars, ...rest } = project
+            return {
+              ...rest,
+              collections: collectionsValue
+            }
           })
 
-          // 后端返回格式：{ message: "success", data: [...] } 或 { code: 200, data: [...] }
-          // 兼容两种格式
-          const isSuccess = (response && (response.code === 200 || response.message === 'success'))
-          const projectsData = response?.data || response?.data?.list || []
-          
-          // 调试：打印原始响应和解析后的数据
-          console.log('项目列表后端原始响应:', response)
-          console.log('项目列表解析后的数据（前3个）:', projectsData.slice(0, 3).map(p => ({
-            name: p.name,
-            collections: p.collections,
-            stars: p.stars,
-            loves: p.loves
-          })))
-          
-          if (isSuccess && Array.isArray(projectsData)) {
-            // 统一使用 collections 字段，移除 loves 和 stars 字段
-            const mappedProjects = projectsData.map(project => {
-              // 确保 collections 字段存在，如果不存在则设为 0
-              const collectionsValue = (project.collections !== undefined && project.collections !== null) 
-                ? project.collections 
-                : 0
-              
-              // 移除 loves 和 stars 字段，只保留 collections
-              // eslint-disable-next-line no-unused-vars
-              const { loves, stars, ...rest } = project
-              
-              return {
-                ...rest,
-                collections: collectionsValue
-              }
-            })
-            
-            console.log('映射后的项目列表数据（前3个）:', mappedProjects.slice(0, 3).map(p => ({
-              name: p.name,
-              collections: p.collections
-            })))
-            
-            // 即使数据为空，也正常处理（显示空列表）
-            commit('setProjectsList', mappedProjects)
-            commit('setProjectsPagination', {
-              total: response.data?.total || mappedProjects.length,
-              hasMore: response.data?.hasMore || false
-            })
-            commit('setProjectsCategories', [...new Set(mappedProjects.map(p => p.category))])
-          }
+          commit('setProjectsList', mappedProjects)
+          commit('setProjectsPagination', {
+            total: response.data?.total || mappedProjects.length,
+            hasMore: response.data?.hasMore || false
+          })
+          commit('setProjectsCategories', [...new Set(mappedProjects.map(p => p.category))])
         }
       } catch (error) {
         console.error('获取项目列表失败:', error)
-        commit('setProjectsList', mockProjects)
-        commit('setProjectsCategories', [...new Set(mockProjects.map(p => p.category))])
+        commit('setProjectsList', [])
+        commit('setProjectsCategories', [])
       } finally {
         commit('setProjectsLoading', false)
       }
@@ -1115,18 +965,9 @@ export default createStore({
       
       try {
         const response = await HttpManager.getProjectDetail(projectId)
-        
-        // 调试：打印后端原始响应
-        console.log('后端原始响应:', response)
 
-        // 后端返回格式：{ message: "success", data: {...} } 或直接返回 data
-        // 兼容两种格式
         const isSuccess = (response && (response.code === 200 || response.message === 'success'))
         const projectData = response?.data || response
-        
-        // 调试：打印解析后的项目数据
-        console.log('解析后的项目数据:', projectData)
-        console.log('项目数据中的 collections:', projectData?.collections)
 
         if (isSuccess && projectData) {
           commit('setCurrentProjectDetail', projectData)
@@ -1233,78 +1074,12 @@ export default createStore({
 
     // ============ 工具相关 ============
     // 获取工具列表
-    async fetchTools({ commit, state }, { params = {}, useMock = false } = {}) {
+    async fetchTools({ commit, state }, { params = {} } = {}) {
       commit('setToolsLoading', true)
 
-      try {
-        if (useMock) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-          commit('setToolsList', mockTools)
-          commit('setToolsCategories', [...new Set(mockTools.map(t => t.category))])
-          commit('setToolsPagination', { total: mockTools.length })
-
-          // 初始化标签分组数据
-          const filterTags = (ids) => predefinedTags?.filter(tag => ids.includes(tag.id)) || []
-          const tagsByCategory = {
-            平台: filterTags(['web', 'desktop', 'mobile', 'cross-platform']),
-            操作系统: filterTags(['windows', 'macos', 'linux', 'ios', 'android']),
-            技术栈: filterTags(['javascript', 'python', 'java', 'csharp', 'cpp', 'php', 'go', 'rust']),
-            工具类型: filterTags(['ide', 'editor', 'cli', 'api', 'debug', 'test', 'design']),
-            用途领域: filterTags(['frontend', 'backend', 'database', 'devops', 'ai-ml', 'data-science', 'web3', 'game-dev']),
-            许可证价格: filterTags(['open-source', 'free', 'freemium', 'paid', 'subscription']),
-            其他: filterTags(['general', 'new', 'popular', 'official', 'community'])
-          }
-          commit('setToolsTagsByCategory', tagsByCategory)
-        } else {
-          const response = await HttpManager.getTools({
-            page: state.tools.pagination.page,
-            page_size: 100, // 设置足够大的值以获取所有工具
-            ...params
-          })
-
-          // 后端返回格式：{ message: "success", data: [...] } 或 { code: 200, data: [...] }
-          // 兼容两种格式
-          const isSuccess = (response && (response.code === 200 || response.message === 'success'))
-          const toolsData = response?.data || response?.data?.list || []
-          
-          if (isSuccess && Array.isArray(toolsData)) {
-            // 即使数据为空，也正常处理（显示空列表）
-            commit('setToolsList', toolsData)
-            commit('setToolsPagination', {
-              total: response.data?.total || toolsData.length,
-              hasMore: response.data?.hasMore || false
-            })
-            // 兼容 category 和 catagory 两种拼写
-            commit('setToolsCategories', [...new Set(toolsData.map(t => t.category || t.catagory).filter(Boolean))])
-
-            // 初始化标签分组数据
-            const filterTags = (ids) => predefinedTags?.filter(tag => ids.includes(tag.id)) || []
-            const tagsByCategory = {
-              平台: filterTags(['web', 'desktop', 'mobile', 'cross-platform']),
-              操作系统: filterTags(['windows', 'macos', 'linux', 'ios', 'android']),
-              技术栈: filterTags(['javascript', 'python', 'java', 'csharp', 'cpp', 'php', 'go', 'rust']),
-              工具类型: filterTags(['ide', 'editor', 'cli', 'api', 'debug', 'test', 'design']),
-              用途领域: filterTags(['frontend', 'backend', 'database', 'devops', 'ai-ml', 'data-science', 'web3', 'game-dev']),
-              许可证价格: filterTags(['open-source', 'free', 'freemium', 'paid', 'subscription']),
-              其他: filterTags(['general', 'new', 'popular', 'official', 'community'])
-            }
-            commit('setToolsTagsByCategory', tagsByCategory)
-          } else {
-            // 后端返回格式不正确或出错
-            throw new Error(`后端返回错误: ${response?.message || response?.code || 'unknown'}`)
-          }
-        }
-      } catch (error) {
-        console.error('获取工具列表失败:', error)
-        // 不再使用 mockTools 作为后备，因为 mockTools 中的 ID 与数据库中的实际 ID 不匹配
-        // 会导致用户点击工具卡片时出现 404 错误
-        // 如果后端获取失败，显示空列表，让用户知道数据加载失败
-        commit('setToolsList', [])
-        commit('setToolsCategories', [])
-
-        // 初始化标签分组数据（即使没有工具数据，也初始化标签，以备后续使用）
+      const initTagsByCategory = () => {
         const filterTags = (ids) => predefinedTags?.filter(tag => ids.includes(tag.id)) || []
-        const tagsByCategory = {
+        return {
           平台: filterTags(['web', 'desktop', 'mobile', 'cross-platform']),
           操作系统: filterTags(['windows', 'macos', 'linux', 'ios', 'android']),
           技术栈: filterTags(['javascript', 'python', 'java', 'csharp', 'cpp', 'php', 'go', 'rust']),
@@ -1313,7 +1088,34 @@ export default createStore({
           许可证价格: filterTags(['open-source', 'free', 'freemium', 'paid', 'subscription']),
           其他: filterTags(['general', 'new', 'popular', 'official', 'community'])
         }
-        commit('setToolsTagsByCategory', tagsByCategory)
+      }
+
+      try {
+        const response = await HttpManager.getTools({
+          page: state.tools.pagination.page,
+          page_size: 100,
+          ...params
+        })
+
+        const isSuccess = (response && (response.code === 200 || response.message === 'success'))
+        const toolsData = response?.data || response?.data?.list || []
+
+        if (isSuccess && Array.isArray(toolsData)) {
+          commit('setToolsList', toolsData)
+          commit('setToolsPagination', {
+            total: response.data?.total || toolsData.length,
+            hasMore: response.data?.hasMore || false
+          })
+          commit('setToolsCategories', [...new Set(toolsData.map(t => t.category || t.catagory).filter(Boolean))])
+          commit('setToolsTagsByCategory', initTagsByCategory())
+        } else {
+          throw new Error(`后端返回错误: ${response?.message || response?.code || 'unknown'}`)
+        }
+      } catch (error) {
+        console.error('获取工具列表失败:', error)
+        commit('setToolsList', [])
+        commit('setToolsCategories', [])
+        commit('setToolsTagsByCategory', initTagsByCategory())
       } finally {
         commit('setToolsLoading', false)
       }
@@ -1364,25 +1166,31 @@ export default createStore({
 
         if (isSuccess && toolData) {
           commit('setCurrentToolDetail', toolData)
-          // 先获取当前的浏览量，然后增加浏览量，最后更新本地数据
-          const currentViews = toolData.views || 0
-          try {
-            const viewResponse = await HttpManager.addToolView(toolId)
-            // 如果 addToolView 返回了更新后的浏览量，使用它；否则使用当前浏览量 + 1
-            const updatedViews = viewResponse?.data?.views ?? (currentViews + 1)
-            // 更新本地工具详情中的浏览量
-            toolData.views = updatedViews
-            commit('setCurrentToolDetail', toolData)
-            // 同时更新列表中的浏览量
-            const toolIndex = state.tools.toolsList.findIndex(t => (t.resourceId || t.id) === parseInt(toolId))
+          const rid = normalizeResourceId(toolId)
+          const viewKey = rid ? `${TOOL_VIEW_SESSION_PREFIX}${rid}` : null
+          const alreadyCounted = viewKey && typeof sessionStorage !== 'undefined' && sessionStorage.getItem(viewKey)
+          const currentViews = Number(toolData.views) || 0
+          if (!alreadyCounted) {
+            try {
+              const viewResponse = await HttpManager.addToolView(toolId)
+              const payload = viewResponse?.data ?? viewResponse
+              const updatedViews = payload?.views ?? payload?.data?.views ?? (currentViews + 1)
+              toolData.views = updatedViews
+              if (viewKey) sessionStorage.setItem(viewKey, '1')
+            } catch (error) {
+              console.error('增加浏览量失败:', error)
+            }
+          }
+          commit('setCurrentToolDetail', toolData)
+          if (rid) {
+            const toolIndex = state.tools.toolsList.findIndex(t =>
+              matchResourceId(t.resourceId ?? t.id, rid)
+            )
             if (toolIndex !== -1) {
               const updatedList = [...state.tools.toolsList]
-              updatedList[toolIndex] = { ...updatedList[toolIndex], views: updatedViews }
+              updatedList[toolIndex] = { ...updatedList[toolIndex], views: toolData.views }
               commit('setToolsList', updatedList)
             }
-          } catch (error) {
-            console.error('增加浏览量失败:', error)
-            // 即使增加浏览量失败，也继续返回工具详情
           }
           return toolData
         }
@@ -1439,7 +1247,7 @@ export default createStore({
           ]
         }
         const isCollected = allCollections.some(item =>
-          (item.resourceId || item.resource_id) === toolId && 
+          matchResourceId(item.resourceId ?? item.resource_id ?? item.id, toolId) &&
           (item.resourceType || item.resource_type) === resourceType
         )
 
@@ -1455,19 +1263,39 @@ export default createStore({
       }
     },
 
-    // AI分析链接
+    // 从链接解析基础信息（不调用 AI）
     async analyzeUrl(context, url) {
+      const raw = (url || '').trim()
+      if (!raw) {
+        throw new Error('请输入有效链接')
+      }
+
       try {
-        // 这里需要根据实际API调整
-        // 暂时返回模拟数据
+        const parsed = new URL(raw)
+        const hostname = parsed.hostname.replace(/^www\./, '')
+        const favicon = `https://www.google.com/s2/favicons?sz=64&domain=${hostname}`
+
+        if (hostname.includes('github.com')) {
+          const parts = parsed.pathname.split('/').filter(Boolean)
+          if (parts.length >= 2) {
+            const owner = parts[0]
+            const name = parts[1].replace(/\.git$/i, '')
+            return {
+              name,
+              desc: `${owner}/${name} 开源项目，请补充简介与标签。`,
+              icon: favicon
+            }
+          }
+        }
+
         return {
-          name: url.split('//')[1]?.split('/')[0] || '未知工具',
-          desc: `这是一个基于 ${url} 的工具，请手动填写详细信息。`,
-          icon: `https://www.google.com/s2/favicons?sz=64&domain=${url}`
+          name: hostname,
+          desc: `来自 ${hostname} 的资源，请手动填写详细信息。`,
+          icon: favicon
         }
       } catch (error) {
-        console.error('AI分析失败:', error)
-        throw error
+        console.error('链接解析失败:', error)
+        throw new Error('请输入有效的 URL')
       }
     },
 
@@ -1547,7 +1375,7 @@ export default createStore({
             throw new Error('未登录')
           }
         } catch (error) {
-          console.log('当前为游客模式或获取资料失败')
+          // 游客模式或网络异常，静默处理
           // 清除所有登录状态（包括token）
           // 只有明确的401错误才清除token，其他错误可能是网络问题，保留token
           if (error.response?.status === 401) {
@@ -1632,9 +1460,24 @@ export default createStore({
     sidebarItems: (state) => state.home.sidebarItems,
     engines: (state) => state.home.engines,
 
-    // 可见的侧边栏项目（adminOnly 仅管理员可见）
-    visibleSidebarItems: (state, getters) =>
-      state.home.sidebarItems.filter(item => !item.adminOnly || getters.isAdmin),
+    visibleSidebarItems: (state, getters) => [
+      ...getters.primarySidebarItems,
+      ...getters.adminSidebarItems
+    ],
+
+    primarySidebarItems: (state, getters) =>
+      state.home.sidebarItems.filter(item => {
+        if (item.group === 'admin' || item.adminOnly) return false
+        if (item.requireLogin && !getters.isLoggedIn) return false
+        return true
+      }),
+
+    adminSidebarItems: (state, getters) => {
+      if (!getters.isAdmin) return []
+      return state.home.sidebarItems.filter(item =>
+        item.group === 'admin' || (item.adminOnly && item.route)
+      )
+    },
 
     // 当前搜索引擎名称
     currentEngineName: (state) => {

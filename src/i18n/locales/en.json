@@ -26,6 +26,8 @@
     "notifEmpty": "No notifications",
     "markRead": "Mark all read",
     "lang": "Language",
+    "langZh": "简体中文",
+    "langEn": "English",
     "engineLocal": "This site"
   }
 }

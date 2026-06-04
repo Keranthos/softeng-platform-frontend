@@ -266,7 +266,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useStore } from 'vuex'  // 替换 Pinia 导入
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -629,9 +629,6 @@ onMounted(() => {
   }
 })
 
-onUnmounted(() => {
-  console.log('ToolSubmit 组件被销毁')
-})
 </script>
 
 <style scoped>

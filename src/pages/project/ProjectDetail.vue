@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div v-if="project && !isLoading" class="animate-fade-in max-w-5xl mx-auto">
     <!-- 项目信息区域 -->
     <div
@@ -64,7 +64,9 @@
 
         <ResourceAiSummary
           :title="project.name"
-          :body="String(project.description || '')"
+          :body="summarySourceBody"
+          :insight="contentInsight"
+          insight-tag="项目精编"
           class="mb-6"
         />
 
@@ -134,9 +136,10 @@
         <i class="fas fa-book"></i> 项目详情
       </h2>
       <div class="bg-gray-50 rounded-xl p-6 border border-gray-200">
-        <div class="whitespace-pre-line leading-relaxed text-gray-700">
-          {{ project.details }}
+        <div v-if="projectDetailText" class="whitespace-pre-line leading-relaxed text-gray-700">
+          {{ projectDetailText }}
         </div>
+        <p v-else class="text-gray-400 text-sm text-center py-4">暂无项目详情，提交者可补充详细介绍。</p>
       </div>
     </div>
 
@@ -302,6 +305,7 @@ import { HttpManager } from '@/api'
 import detailSkeleton from '@/components/DetailSkeleton.vue'
 import ResourceAiSummary from '@/components/ResourceAiSummary.vue'
 import ResourceRecommendBar from '@/components/ResourceRecommendBar.vue'
+import { parseCourseJsonField } from '@/utils/courseContent'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { getImageUrl } from '@/utils/image'
 // 假设有项目标签数据
@@ -317,6 +321,7 @@ const isAuthenticated = computed(() => store.getters.isLoggedIn)
 
 // 一、变量声明
 const project = ref(null)
+const contentInsight = ref(null)
 const isCollected = ref(false)
 const isLoading = ref(false)
 const comments = ref([])
@@ -332,6 +337,21 @@ const pagination = ref({
 })
 
 // 二、计算属性
+const projectDetailText = computed(() => {
+  const p = project.value
+  if (!p) return ''
+  return String(p.details || p.detail || '').trim()
+})
+
+/** 规则摘要源：优先详情正文，避免与上方简介重复 */
+const summarySourceBody = computed(() => {
+  const p = project.value
+  if (!p) return ''
+  const detail = String(p.details || p.detail || '').trim()
+  if (detail) return detail
+  return String(p.description || '').trim()
+})
+
 const currentPageComments = computed(() => {
   const start = (pagination.value.page - 1) * pagination.value.pageSize
   const end = start + pagination.value.pageSize
@@ -437,7 +457,6 @@ const handleCollect = async () => {
         if (project.value) {
           project.value.collections = finalCollections
         }
-        console.log('使用后端返回的收藏数:', finalCollections)
       } else {
         // 如果后端没有返回 collections 或值为无效，则根据收藏状态变化来增减
         if (project.value) {
@@ -445,12 +464,9 @@ const handleCollect = async () => {
             // 从未收藏变为已收藏，增加1
             finalCollections = previousCollections + 1
             project.value.collections = finalCollections
-            console.log('手动增加收藏数，新值:', finalCollections)
           } else if (!newIsCollected && previousIsCollected) {
-            // 从已收藏变为未收藏，减少1
             finalCollections = Math.max(0, previousCollections - 1)
             project.value.collections = finalCollections
-            console.log('手动减少收藏数，新值:', finalCollections)
           }
         }
         console.warn('后端未返回有效的 collections 值，使用本地计算:', data.collections)
@@ -462,7 +478,6 @@ const handleCollect = async () => {
         collections: finalCollections,
         isCollected: newIsCollected
       })
-      console.log('已同步更新列表页数据:', { projectId, collections: finalCollections, isCollected: newIsCollected })
 
       ElMessage.success(isCollected.value ? '已收藏' : '已取消收藏')
     } else {
@@ -498,33 +513,28 @@ const loadProjectDetail = async (id) => {
       return
     }
 
-    // 调试：打印后端返回的原始数据
-    console.log('项目详情原始数据:', projectData)
-    console.log('后端返回的 collections:', projectData?.collections)
-    
-    // 统一使用 collections 字段，移除 loves 和 stars 字段
-    // 后端返回的 stars 是点赞数，collections 才是收藏数
     if (projectData) {
-      // 统一使用 collections 字段，移除 loves 和 stars 字段
-      const collectionsValue = (projectData.collections !== undefined && projectData.collections !== null) 
-        ? projectData.collections 
+      const collectionsValue = (projectData.collections !== undefined && projectData.collections !== null)
+        ? projectData.collections
         : 0
-      
-      // 移除 loves 和 stars 字段，只保留 collections
+
       // eslint-disable-next-line no-unused-vars
       const { loves, stars, ...rest } = projectData
-      
+
       project.value = {
         ...rest,
-        collections: collectionsValue
+        collections: collectionsValue,
+        details: rest.details || rest.detail || '',
+        detail: rest.detail || rest.details || ''
       }
-      
-      console.log('最终项目对象:', {
-        name: project.value.name,
-        collections: project.value.collections
-      })
+      contentInsight.value = parseCourseJsonField(
+        projectData.contentInsight ?? projectData.content_insight
+      )
     } else {
       project.value = projectData
+      contentInsight.value = parseCourseJsonField(
+        projectData?.contentInsight ?? projectData?.content_insight
+      )
     }
 
     // 非核心数据后台加载
@@ -832,10 +842,8 @@ const handleImageError = (event) => {
 }
 
 // 打开图片预览（可选功能）
-const openImageModal = (imageUrl, index) => {
-  // 可以在这里实现图片预览功能，比如使用 Element Plus 的 Image 组件
-  // eslint-disable-next-line no-unused-vars
-  console.log('打开图片预览:', imageUrl, index)
+const openImageModal = () => {
+  // 图片预览功能待实现
 }
 
 // 四、生命周期函数

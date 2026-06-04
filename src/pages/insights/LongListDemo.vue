@@ -1,72 +1,144 @@
 <template>
-  <div class="longlist-page">
+  <div class="catalog-page">
     <header class="head">
       <div>
-        <h1>长列表渲染优化演示</h1>
-        <p class="sub">CSS content-visibility + 固定行高 · 报告可写「万级 DOM 性能」</p>
+        <h1>全站资源目录</h1>
+        <p class="sub">聚合工具、课程、项目，支持检索与快速跳转</p>
       </div>
       <div class="actions">
-        <el-input-number v-model="rowCount" :min="500" :max="15000" :step="500" size="small" />
-        <el-button type="primary" @click="regen">重新生成</el-button>
-        <el-button @click="$router.push('/tools')">返回工具列表</el-button>
+        <el-input
+          v-model="keyword"
+          placeholder="搜索名称或分类…"
+          clearable
+          class="search-input"
+          @input="onFilter"
+        >
+          <template #prefix><i class="fas fa-search" /></template>
+        </el-input>
+        <el-button @click="$router.push('/home')">返回主页</el-button>
       </div>
     </header>
-    <p class="hint">共 {{ items.length }} 行虚拟占位数据。仅用于答辩/报告截图，不参与业务。</p>
-    <div class="scroll" ref="scrollRef">
+
+    <div class="toolbar">
+      <el-radio-group v-model="typeFilter" size="small" @change="onFilter">
+        <el-radio-button label="all">全部 ({{ allItems.length }})</el-radio-button>
+        <el-radio-button label="tool">工具 ({{ countByType.tool }})</el-radio-button>
+        <el-radio-button label="course">课程 ({{ countByType.course }})</el-radio-button>
+        <el-radio-button label="project">项目 ({{ countByType.project }})</el-radio-button>
+      </el-radio-group>
+      <span class="stat">当前显示 {{ filteredItems.length }} 条</span>
+    </div>
+
+    <div v-if="loading" class="loading"><i class="fas fa-spinner fa-spin" /> 加载资源…</div>
+
+    <div v-else ref="scrollRef" class="scroll">
       <div
-        v-for="row in items"
-        :key="row.id"
+        v-for="row in filteredItems"
+        :key="row.uid"
         class="row cv-row"
+        role="button"
+        tabindex="0"
+        @click="goDetail(row)"
+        @keydown.enter="goDetail(row)"
       >
         <span class="idx">#{{ row.id }}</span>
-        <span class="title">{{ row.title }}</span>
-        <el-tag size="small" type="info">{{ row.tag }}</el-tag>
+        <el-tag size="small" :type="typeTag(row.type)">{{ row.typeLabel }}</el-tag>
+        <span class="title">{{ row.name }}</span>
+        <span v-if="row.category" class="cat">{{ row.category }}</span>
+        <span class="views"><i class="fas fa-eye" /> {{ row.views || 0 }}</span>
       </div>
+      <el-empty v-if="!filteredItems.length" description="没有匹配的资源" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { HttpManager } from '@/api'
+import { extractApiList, mergeResources } from '@/utils/resourceCatalog'
 
-const rowCount = ref(5000)
-const items = ref([])
+const router = useRouter()
+const loading = ref(true)
+const keyword = ref('')
+const typeFilter = ref('all')
+const allItems = ref([])
+const filteredItems = ref([])
 const scrollRef = ref(null)
 
-function regen () {
-  const n = Math.min(15000, Math.max(500, rowCount.value))
-  const out = []
-  const tags = ['工具', '课程', '项目', 'DevOps', '前端', '数据']
-  for (let i = 1; i <= n; i++) {
-    out.push({
-      id: i,
-      title: `演示条目 ${i} · 软件工程资源平台`,
-      tag: tags[i % tags.length]
-    })
-  }
-  items.value = out
+const countByType = computed(() => ({
+  tool: allItems.value.filter(r => r.type === 'tool').length,
+  course: allItems.value.filter(r => r.type === 'course').length,
+  project: allItems.value.filter(r => r.type === 'project').length
+}))
+
+function typeTag (type) {
+  if (type === 'tool') return 'primary'
+  if (type === 'course') return 'success'
+  return 'warning'
 }
 
-watch(rowCount, () => regen(), { immediate: true })
+function onFilter () {
+  const q = keyword.value.trim().toLowerCase()
+  filteredItems.value = allItems.value.filter(row => {
+    if (typeFilter.value !== 'all' && row.type !== typeFilter.value) return false
+    if (!q) return true
+    return (
+      row.name.toLowerCase().includes(q) ||
+      (row.category && row.category.toLowerCase().includes(q)) ||
+      row.typeLabel.includes(q)
+    )
+  })
+}
+
+function goDetail (row) {
+  if (row.route) router.push(row.route)
+}
+
+async function loadAll () {
+  loading.value = true
+  try {
+    const [toolsRes, coursesRes, projectsRes] = await Promise.all([
+      HttpManager.getTools({ page_size: 500 }),
+      HttpManager.getCourses({ limit: 500, cursor: 0 }),
+      HttpManager.getProjects({ limit: 500 })
+    ])
+    allItems.value = mergeResources(
+      extractApiList(toolsRes),
+      extractApiList(coursesRes),
+      extractApiList(projectsRes)
+    )
+    onFilter()
+  } catch (e) {
+    console.error('[catalog] 加载失败', e)
+    allItems.value = []
+    filteredItems.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadAll)
 </script>
 
 <style scoped>
-.longlist-page {
+.catalog-page {
   min-height: 100vh;
-  padding: 20px;
+  padding: 20px 24px 32px;
   background: #0f172a;
   color: #e2e8f0;
+  box-sizing: border-box;
 }
 .head {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 16px;
+  margin-bottom: 14px;
 }
 .head h1 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.4rem;
 }
 .sub {
   margin: 4px 0 0;
@@ -79,10 +151,25 @@ watch(rowCount, () => regen(), { immediate: true })
   gap: 10px;
   align-items: center;
 }
-.hint {
-  font-size: 0.8rem;
+.search-input {
+  width: 240px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.stat {
+  font-size: 0.82rem;
   color: #64748b;
-  margin: 0 0 12px;
+}
+.loading {
+  padding: 48px;
+  text-align: center;
+  color: #94a3b8;
 }
 .scroll {
   max-height: calc(100vh - 200px);
@@ -99,6 +186,11 @@ watch(rowCount, () => regen(), { immediate: true })
   border-bottom: 1px solid rgba(51, 65, 85, 0.5);
   min-height: 44px;
   box-sizing: border-box;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.row:hover {
+  background: rgba(56, 189, 248, 0.08);
 }
 .cv-row {
   content-visibility: auto;
@@ -107,8 +199,9 @@ watch(rowCount, () => regen(), { immediate: true })
 .idx {
   font-variant-numeric: tabular-nums;
   color: #64748b;
-  width: 72px;
+  width: 56px;
   flex-shrink: 0;
+  font-size: 0.82rem;
 }
 .title {
   flex: 1;
@@ -117,5 +210,18 @@ watch(rowCount, () => regen(), { immediate: true })
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 0.88rem;
+}
+.cat {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.views {
+  color: #64748b;
+  font-size: 0.78rem;
+  flex-shrink: 0;
 }
 </style>

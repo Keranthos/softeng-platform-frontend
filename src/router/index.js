@@ -6,6 +6,7 @@ import { createRouter, createWebHistory, RouterView } from 'vue-router'
 import store from '@/store'
 import { recordRouteVisit } from '@/utils/sessionAnalytics'
 import { appendJournalEvent } from '@/utils/eventJournal'
+import { ElMessage } from 'element-plus'
 
 const constantRoutes = [
   {
@@ -122,7 +123,7 @@ const constantRoutes = [
       },
       {
         path: 'list',
-        name: 'CourseList',
+        name: 'CourseListPage',
         component: () => import('@/pages/course/CourseList.vue'),
         meta: { title: '课程列表' }
       },
@@ -133,7 +134,7 @@ const constantRoutes = [
         meta: { title: '课程详情' }
       },
       {
-        path: '/course/submit',
+        path: 'submit',
         name: 'CourseSubmit',
         component: () => import('@/pages/course/CourseSubmit.vue'),
         meta: { title: '资料上传' }
@@ -181,55 +182,72 @@ const constantRoutes = [
       }
     ]
   },
-  // 数据洞察 / 运营与智能能力（仅管理员，见路由守卫 meta.requiresAdmin）
+  {
+    path: '/assistant',
+    component: RouterView,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: 'rag',
+        name: 'AssistantRag',
+        component: () => import('@/pages/insights/RagAgent.vue'),
+        meta: { title: '学习助手' }
+      }
+    ]
+  },
+  // 数据洞察 / 运营与站点功能
   {
     path: '/insights',
     component: RouterView,
-    meta: { requiresAdmin: true },
     children: [
       {
         path: 'dashboard',
         name: 'OpsDashboard',
         component: () => import('@/pages/insights/OperationsDashboard.vue'),
-        meta: { title: '运营数据大屏' }
+        meta: { title: '数据概览', requiresAdmin: true }
       },
       {
         path: 'knowledge-graph',
         name: 'KnowledgeGraph',
         component: () => import('@/pages/insights/KnowledgeGraph.vue'),
-        meta: { title: '资源关联图谱' }
+        meta: { title: '资源关联图谱', requiresAdmin: true }
       },
       {
         path: 'telemetry',
         name: 'TelemetryPanel',
         component: () => import('@/pages/insights/TelemetryPanel.vue'),
-        meta: { title: '可观测性' }
+        meta: { title: '接口与性能监控', requiresAdmin: true }
       },
       {
         path: 'long-list',
-        name: 'LongListDemo',
+        name: 'ResourceCatalog',
         component: () => import('@/pages/insights/LongListDemo.vue'),
-        meta: { title: '长列表演示' }
+        meta: { title: '全站资源目录', requiresAdmin: true }
       },
       {
         path: 'rag-agent',
         name: 'RagAgent',
-        component: () => import('@/pages/insights/RagAgent.vue'),
-        meta: { title: 'RAG 学习助手' }
+        redirect: '/assistant/rag'
       },
       {
         path: 'session-persona',
         name: 'SessionPersona',
         component: () => import('@/pages/insights/SessionPersona.vue'),
-        meta: { title: '会话画像' }
+        meta: { title: '浏览习惯', requiresAuth: true }
       },
       {
         path: 'event-timeline',
         name: 'EventTimeline',
         component: () => import('@/pages/insights/EventTimeline.vue'),
-        meta: { title: '事件时间线' }
+        meta: { title: '平台动态', requiresAuth: true }
       }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/pages/NotFound.vue'),
+    meta: { title: '页面不存在' }
   }
 ]
 
@@ -254,7 +272,7 @@ const router = createRouter({
 
 // 路由守卫：检查需要登录的路由
 router.beforeEach(async (to, from, next) => {
-  const token = localStorage.getItem('token')
+  let token = localStorage.getItem('token')
   
   // 登录相关页面（登录、注册、忘记密码），允许访问（不验证 token）
   // 这样即使有旧的 token，用户也可以重新登录
@@ -271,6 +289,7 @@ router.beforeEach(async (to, from, next) => {
       console.warn('初始化用户信息失败:', error)
       // 初始化失败不影响路由跳转，继续执行
     }
+    token = store.state.token || localStorage.getItem('token')
   }
   
   // 管理员专属（洞察页、审核中心等）
@@ -285,6 +304,7 @@ router.beforeEach(async (to, from, next) => {
     const role = store.state.user.role
     const isAdmin = role === 'admin' || role === 'superadmin'
     if (!isAdmin) {
+      ElMessage.warning('该页面仅管理员可访问')
       next({ path: '/home' })
       return
     }

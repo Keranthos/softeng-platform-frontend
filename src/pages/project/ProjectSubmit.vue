@@ -110,10 +110,9 @@
           </div>
           <button
             @click="handleAutoFill"
-            :disabled="isAnalyzing"
-            class="absolute right-1 top-1 bottom-1 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white px-4 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
-            <i v-if="isAnalyzing" class="fas fa-spinner fa-spin"></i>
-            {{ isAnalyzing ? '分析中...' : '一键填写' }}
+            class="absolute right-1 top-1 bottom-1 bg-red-500 hover:bg-red-600 text-white px-4 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
+            <i class="fas fa-link"></i>
+            链接预填
           </button>
         </div>
         <div class="mb-4">
@@ -321,7 +320,6 @@ const store = useStore()
 const isAuthenticated = computed(() => store.getters.isLoggedIn)
 
 // 响应式数据定义
-const isAnalyzing = ref(false)
 const form = reactive({
   name: '',
   githubUrl: '',
@@ -534,25 +532,37 @@ const validateForm = () => {
   return Object.keys(errors).length === 0
 }
 
-const handleAutoFill = async () => {
-  if (!(form.githubUrl || '').trim()) {
-    ElMessage.warning('请先填写GitHub链接')
+const handleAutoFill = () => {
+  const raw = (form.githubUrl || '').trim()
+  if (!raw) {
+    ElMessage.warning('请先填写 GitHub 链接')
     return
   }
 
-  isAnalyzing.value = true
+  let repo = null
   try {
-    // 模拟AI分析
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    form.name = String(form.githubUrl || '').split('/').pop() || '项目'
-    form.description = `这是一个基于 ${form.githubUrl} 的开源项目。`
-    form.technologies = ['Vue', 'JavaScript', 'Node.js']
-    ElMessage.success('AI 分析完成，内容已填充')
-  } catch (error) {
-    ElMessage.error('分析失败')
-  } finally {
-    isAnalyzing.value = false
+    const u = new URL(raw)
+    if (!u.hostname.includes('github.com')) {
+      ElMessage.warning('目前仅支持 github.com 仓库链接')
+      return
+    }
+    const parts = u.pathname.split('/').filter(Boolean)
+    if (parts.length < 2) {
+      ElMessage.warning('链接格式应为 https://github.com/用户名/仓库名')
+      return
+    }
+    repo = {
+      owner: parts[0],
+      name: parts[1].replace(/\.git$/i, '')
+    }
+  } catch {
+    ElMessage.warning('请输入有效的 GitHub 仓库链接')
+    return
   }
+
+  form.name = repo.name
+  form.description = `${repo.owner}/${repo.name} 开源项目，请补充简介与标签。`
+  ElMessage.success('已从仓库链接预填名称与简介')
 }
 
 const submit = async () => {

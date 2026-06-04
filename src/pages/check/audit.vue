@@ -103,7 +103,7 @@
                     </div>
                     <div class="mt-4 flex justify-center">
                         <el-button-group size="small">
-                            <el-button @click="workflowStep = 0">演示：提交</el-button>
+                            <el-button @click="workflowStep = 0">提交</el-button>
                             <el-button @click="workflowStep = 1">校验</el-button>
                             <el-button @click="workflowStep = 2">待审</el-button>
                             <el-button type="primary" @click="workflowStep = 3">裁定</el-button>
@@ -374,13 +374,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { HttpManager } from '../../api'
-// 本地 mock（开发时使用），若后端可用请将 useMock 设为 false
-import { getPendingReviewsMock, reviewItemMock } from '@/data/check/mockData'
 import { getUserAvatarUrl } from '@/utils/avatar'
 import { predefinedTags } from '@/data/tool/tags'
 import { appendJournalEvent } from '@/utils/eventJournal'
-import { pushDemoNotification } from '@/utils/demoNotifications'
-const useMock = false // 改为false以使用真实后端API
 
 const router = useRouter()
 const store = useStore()
@@ -396,7 +392,7 @@ const selectedIds = ref([]) // 批量审核选中 id
 // 用户菜单显示控制
 const showUserMenu = ref(false)
 const avatarRef = ref(null)
-/** 审核流程演示步骤（0~3），用于状态机可视化 */
+/** 审核流程步骤（0~3），用于状态机可视化 */
 const workflowStep = ref(2)
 
 // 用户状态（从 store 获取）
@@ -495,9 +491,7 @@ async function fetchPending(t = null, p = 1) {
     loading.value = true
     const type = t || activeTab.value // 当前页标签是用于页内切换时使用
     try {
-        const res = useMock 
-            ? await getPendingReviewsMock({ type, page: p, page_size: pageSize.value }) 
-            : await HttpManager.getPendingReviews({ type, page: p, page_size: pageSize.value })
+        const res = await HttpManager.getPendingReviews({ type, page: p, page_size: pageSize.value })
         
         const { results, total: tot } = normalizeResponse(res)
 
@@ -582,11 +576,7 @@ async function review(item, action) {
             reject_reason: rejectReason
         }
 
-        if (useMock) {
-            await reviewItemMock(item.id || item._id || item.resourceId, params)
-        } else {
-            await HttpManager.reviewItem(item.id || item._id || item.resourceId, params)
-        }
+        await HttpManager.reviewItem(item.id || item._id || item.resourceId, params)
 
         ElMessage.success(`已${actionText}该${getTypeLabel()}`)
 
@@ -595,13 +585,6 @@ async function review(item, action) {
             title: `审核${actionText}：${getTypeLabel()}`,
             detail: getItemField(item, 'title')
         })
-        if (action === 'approve') {
-            pushDemoNotification({
-                title: '审核通过',
-                body: `「${getItemField(item, 'title')}」已通过（演示通知）。`,
-                type: 'success'
-            })
-        }
 
         // 从当前列表中移除已处理项
         items.value = items.value.filter(i => 
@@ -693,11 +676,7 @@ async function batchReview (action) {
                 resourceType: activeTab.value,
                 reject_reason: rejectReason
             }
-            if (useMock) {
-                await reviewItemMock(idOf(item), params)
-            } else {
-                await HttpManager.reviewItem(idOf(item), params)
-            }
+            await HttpManager.reviewItem(idOf(item), params)
             appendJournalEvent({
                 kind: 'audit',
                 title: `批量${action === 'approve' ? '通过' : '拒绝'}：${getTypeLabel()}`,
@@ -716,8 +695,7 @@ async function batchReview (action) {
     await fetchPending(null, page.value)
 }
 
-watch(activeTab, (newTab) => {
-    console.log('切换到标签页：', newTab)
+watch(activeTab, () => {
     page.value = 1
     selectedIds.value = []
     fetchPending(newTab, 1)

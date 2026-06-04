@@ -15,10 +15,6 @@
           <i class="fas fa-check-double"></i>
           全部已读
         </button>
-        <button @click="showSendDialog" class="action-btn primary">
-          <i class="fas fa-paper-plane"></i>
-          发送消息
-        </button>
       </div>
     </div>
 
@@ -40,15 +36,6 @@
         <div class="stat-content">
           <span class="stat-value">{{ totalMessages }}</span>
           <span class="stat-label">全部消息</span>
-        </div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-icon sent">
-          <i class="fas fa-paper-plane"></i>
-        </div>
-        <div class="stat-content">
-          <span class="stat-value">{{ sentCount }}</span>
-          <span class="stat-label">已发送</span>
         </div>
       </div>
     </div>
@@ -138,17 +125,8 @@
 
           <div class="detail-header-right">
             <div class="message-actions">
-              <button @click="toggleStar(activeMessage)" class="action-btn" :title="activeMessage.starred ? '取消星标' : '标记星标'">
-                <i :class="['far', activeMessage.starred ? 'fa-star' : 'fa-star']" :style="{ color: activeMessage.starred ? '#f6ad55' : '#a0aec0' }"></i>
-              </button>
-              <button @click="deleteMessage(activeMessage)" class="action-btn" title="删除">
+              <button @click="deleteMessage(activeMessage)" class="action-btn" title="移除通知">
                 <i class="far fa-trash-alt"></i>
-              </button>
-              <button @click="replyMessage(activeMessage)" class="action-btn" title="回复">
-                <i class="fas fa-reply"></i>
-              </button>
-              <button @click="forwardMessage(activeMessage)" class="action-btn" title="转发">
-                <i class="fas fa-share"></i>
               </button>
             </div>
           </div>
@@ -227,168 +205,31 @@
               </div>
             </div>
           </div>
-
-          <!-- 回复区域 -->
-          <div class="message-reply">
-            <div class="reply-header">
-              <h4><i class="fas fa-reply"></i> 回复此消息</h4>
-            </div>
-            <div class="reply-editor">
-              <textarea
-                v-model="replyContent"
-                placeholder="输入回复内容..."
-                rows="4"
-                class="reply-textarea"
-              ></textarea>
-              <div class="reply-actions">
-                <div class="reply-tools">
-                  <button @click="attachFile" class="tool-btn" title="添加附件">
-                    <i class="fas fa-paperclip"></i>
-                  </button>
-                  <button @click="insertEmoji" class="tool-btn" title="插入表情">
-                    <i class="far fa-smile"></i>
-                  </button>
-                  <button @click="formatText('bold')" class="tool-btn" title="加粗">
-                    <i class="fas fa-bold"></i>
-                  </button>
-                  <button @click="formatText('italic')" class="tool-btn" title="斜体">
-                    <i class="fas fa-italic"></i>
-                  </button>
-                </div>
-                <div class="reply-buttons">
-                  <button @click="cancelReply" class="cancel-btn">取消</button>
-                  <button @click="sendReply" class="send-btn">
-                    <i class="fas fa-paper-plane"></i>
-                    发送回复
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
       <div v-else class="no-message-selected">
         <div class="no-message-content">
           <i class="fas fa-envelope-open"></i>
           <h3>选择一条消息查看详情</h3>
-          <p>从左侧列表中选择消息进行查看、回复或管理</p>
+          <p>从左侧列表中选择消息查看详情</p>
         </div>
       </div>
     </div>
-
-    <!-- 发送消息对话框 -->
-    <el-dialog
-      v-model="sendDialogVisible"
-      title="发送新消息"
-      width="600px"
-      @closed="resetSendForm"
-    >
-      <div class="send-message-form">
-        <el-form :model="sendForm" :rules="sendRules" ref="sendFormRef">
-          <el-form-item label="收件人" prop="recipient">
-            <el-select
-              v-model="sendForm.recipient"
-              filterable
-              remote
-              reserve-keyword
-              placeholder="请输入用户名或邮箱"
-              remote-show-suffix
-              :remote-method="searchUsers"
-              :loading="searchLoading"
-            >
-              <el-option
-                v-for="user in searchResults"
-                :key="user.id"
-                :label="`${user.name} (${user.email})`"
-                :value="user.id"
-              >
-                <div class="user-option">
-                  <img :src="getUserAvatarUrl(user.avatar, user.name, user.email)" class="option-avatar">
-                  <div class="option-info">
-                    <span class="option-name">{{ user.name }}</span>
-                    <span class="option-email">{{ user.email }}</span>
-                  </div>
-                </div>
-              </el-option>
-            </el-select>
-          </el-form-item>
-
-          <el-form-item label="消息类型" prop="type">
-            <el-select v-model="sendForm.type" placeholder="选择消息类型">
-              <el-option label="普通消息" value="normal"></el-option>
-              <el-option label="系统通知" value="system"></el-option>
-              <el-option label="重要通知" value="important"></el-option>
-              <el-option label="私信" value="private"></el-option>
-            </el-select>
-          </el-form-item>
-
-          <el-form-item label="主题" prop="subject">
-            <el-input
-              v-model="sendForm.subject"
-              placeholder="请输入消息主题"
-              maxlength="100"
-              show-word-limit
-            />
-          </el-form-item>
-
-          <el-form-item label="内容" prop="content">
-            <el-input
-              v-model="sendForm.content"
-              type="textarea"
-              :rows="6"
-              placeholder="请输入消息内容..."
-              maxlength="1000"
-              show-word-limit
-            />
-          </el-form-item>
-
-          <el-form-item label="附件" prop="attachments">
-            <el-upload
-              class="upload-attachments"
-              action="#"
-              multiple
-              :on-change="handleFileChange"
-              :on-remove="handleFileRemove"
-              :file-list="sendForm.attachments"
-              :auto-upload="false"
-              list-type="text"
-            >
-              <el-button type="primary">
-                <i class="fas fa-plus"></i>
-                添加附件
-              </el-button>
-              <template #tip>
-                <div class="upload-tip">
-                  支持上传图片、文档等文件，单个文件不超过10MB
-                </div>
-              </template>
-            </el-upload>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="sendDialogVisible = false">取消</el-button>
-          <el-button
-            type="primary"
-            @click="submitSendMessage"
-            :loading="sendLoading"
-          >
-            发送消息
-          </el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserAvatarUrl } from '@/utils/avatar'
-// import axios from 'axios'
+import {
+  fetchUserNotifications,
+  notificationsAsInboxMessages,
+  markAllNotificationsRead,
+  markNotificationRead,
+  dismissNotification
+} from '@/utils/userNotifications'
 
 const store = useStore()
 
@@ -396,78 +237,35 @@ const store = useStore()
 const loading = ref(false)
 const activeTab = ref('inbox')
 const activeMessage = ref(null)
-const replyContent = ref('')
-const sendDialogVisible = ref(false)
-const searchLoading = ref(false)
-const sendLoading = ref(false)
 
 // 数据
 const messages = ref([])
-const searchResults = ref([])
 
 const messageTabs = [
   { id: 'inbox', name: '收件箱', icon: 'fa-inbox' },
-  { id: 'unread', name: '未读', icon: 'fa-envelope' },
-  { id: 'starred', name: '星标', icon: 'fa-star' },
-  { id: 'sent', name: '已发送', icon: 'fa-paper-plane' }
+  { id: 'unread', name: '未读', icon: 'fa-envelope' }
 ]
-
-const sendForm = ref({
-  recipient: '',
-  type: 'normal',
-  subject: '',
-  content: '',
-  attachments: []
-})
-
-const sendRules = {
-  recipient: [
-    { required: true, message: '请选择收件人', trigger: 'change' }
-  ],
-  subject: [
-    { required: true, message: '请输入消息主题', trigger: 'blur' },
-    { min: 2, max: 100, message: '长度在 2 到 100 个字符', trigger: 'blur' }
-  ],
-  content: [
-    { required: true, message: '请输入消息内容', trigger: 'blur' },
-    { min: 1, max: 1000, message: '长度在 1 到 1000 个字符', trigger: 'blur' }
-  ]
-}
 
 // 计算属性（后端todo）
 const unreadCount = computed(() =>
-  messages.value.filter(msg => !msg.read && msg.type !== 'sent').length
+  messages.value.filter(msg => !msg.read).length
 )
 
-const totalMessages = computed(() =>
-  messages.value.filter(msg => msg.type !== 'sent').length
-)
-
-const sentCount = computed(() =>
-  messages.value.filter(msg => msg.type === 'sent').length
-)
+const totalMessages = computed(() => messages.value.length)
 
 const filteredMessages = computed(() => {
-  if (activeTab.value === 'inbox') {
-    return messages.value.filter(msg => msg.type !== 'sent')
-  } else if (activeTab.value === 'unread') {
-    return messages.value.filter(msg => !msg.read && msg.type !== 'sent')
-  } else if (activeTab.value === 'starred') {
-    return messages.value.filter(msg => msg.starred)
-  } else if (activeTab.value === 'sent') {
-    return messages.value.filter(msg => msg.type === 'sent')
+  if (activeTab.value === 'unread') {
+    return messages.value.filter(msg => !msg.read)
   }
   return messages.value
 })
 
 const emptyMessage = computed(() => {
-  const messages = {
+  const labels = {
     inbox: '收件箱为空',
-    unread: '没有未读消息',
-    starred: '没有星标消息',
-    sent: '没有已发送消息'
+    unread: '没有未读消息'
   }
-  return messages[activeTab.value] || '没有消息'
+  return labels[activeTab.value] || '没有消息'
 })
 
 // 方法
@@ -475,8 +273,6 @@ const getTabCount = (tabId) => {
   switch (tabId) {
     case 'inbox': return totalMessages.value
     case 'unread': return unreadCount.value
-    case 'starred': return messages.value.filter(msg => msg.starred).length
-    case 'sent': return sentCount.value
     default: return 0
   }
 }
@@ -548,105 +344,20 @@ const formatMessageContent = (content) => {
   return content.replace(/\n/g, '<br>')
 }
 
-// 模拟数据
-const mockMessages = [
-  {
-    id: 1,
-    type: 'system',
-    title: '系统维护通知',
-    content: '为了提供更好的服务，我们将于本周六凌晨2:00-4:00进行系统维护。在此期间，网站将暂时无法访问。感谢您的理解与支持。',
-    sender: {
-      id: 1,
-      name: '系统管理员',
-      email: 'admin@system.com',
-      avatar: 'https://picsum.photos/seed/admin/200/200',
-      role: 'admin'
-    },
-    read: false,
-    starred: true,
-    important: true,
-    urgent: false,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2小时前
-    hasAttachments: false
-  },
-  {
-    id: 2,
-    type: 'normal',
-    title: '关于您提交的工具审核结果',
-    content: '您提交的工具"代码格式化工具"已经通过审核，现已上线。感谢您的贡献！',
-    sender: {
-      id: 2,
-      name: '审核团队',
-      email: 'review@system.com',
-      avatar: 'https://picsum.photos/seed/review/200/200',
-      role: 'admin'
-    },
-    read: true,
-    starred: false,
-    important: false,
-    urgent: false,
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1天前
-    threadId: 'tool-123',
-    threadTitle: '代码格式化工具',
-    hasAttachments: false
-  },
-  {
-    id: 3,
-    type: 'private',
-    title: '关于项目合作邀请',
-    content: '您好！我看到您在平台上的项目展示，非常有兴趣与您合作。请问是否有时间详细沟通？',
-    sender: {
-      id: 3,
-      name: '张明',
-      email: 'zhangming@example.com',
-      avatar: 'https://picsum.photos/seed/user1/200/200',
-      role: 'user'
-    },
-    read: false,
-    starred: false,
-    important: false,
-    urgent: false,
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3天前
-    hasAttachments: true,
-    attachments: [
-      { id: 1, name: '合作方案.pdf', size: '2.4MB', type: 'pdf' },
-      { id: 2, name: '项目计划书.docx', size: '1.8MB', type: 'docx' }
-    ]
-  },
-  {
-    id: 4,
-    type: 'sent',
-    title: '回复：关于项目合作邀请',
-    content: '感谢您的邀请！我对您的合作意向很感兴趣，我们可以在下周安排一次线上会议。',
-    sender: {
-      id: 4,
-      name: '我',
-      email: store.state.user.email,
-      avatar: store.state.user.avatar,
-      role: 'user'
-    },
-    recipient: {
-      name: '张明',
-      email: 'zhangming@example.com'
-    },
-    read: true,
-    starred: false,
-    important: false,
-    urgent: false,
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2天前
-    hasAttachments: false
-  }
-]
-
 const fetchMessages = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    messages.value = mockMessages
+    const token = localStorage.getItem('token')
+    if (!token) {
+      messages.value = []
+      return
+    }
+    const notifs = await fetchUserNotifications({ isAdmin: store.getters.isAdmin })
+    messages.value = notificationsAsInboxMessages(notifs)
   } catch (error) {
     console.error('获取消息失败:', error)
     ElMessage.error('获取消息失败')
+    messages.value = []
   } finally {
     loading.value = false
   }
@@ -689,489 +400,44 @@ const switchTab = (tabId) => {
 
 const selectMessage = (message) => {
   activeMessage.value = message
-  // 标记为已读
   if (!message.read) {
     message.read = true
-    // 实际应该调用API标记为已读
+    markNotificationRead(message.id)
   }
 }
 
-// 后端修改可参考
-// const selectMessage = async (message) => {
-//   activeMessage.value = message
-//
-//   // 如果未读，标记为已读
-//   if (!message.read) {
-//     try {
-//       const response = await axios.put(`/api/messages/${message.id}/read`, {}, {
-//         headers: {
-//           'Authorization': `Bearer ${localStorage.getItem('token')}`
-//         }
-//       })
-//
-//       if (response.data.success) {
-//         message.read = true
-//       }
-//     } catch (error) {
-//       console.error('标记已读失败:', error)
-//     }
-//   }
-// }
-
-const toggleStar = (message) => {
-  message.starred = !message.starred
-  ElMessage.success(message.starred ? '已标记星标' : '已取消星标')
-}
-
-// 后端可参考
-// const toggleStar = async (message) => {
-//   try {
-//     const response = await axios.put(`/api/messages/${message.id}/star`, {
-//       starred: !message.starred
-//     }, {
-//       headers: {
-//         'Authorization': `Bearer ${localStorage.getItem('token')}`
-//       }
-//     })
-//
-//     if (response.data.success) {
-//       message.starred = !message.starred
-//       ElMessage.success(message.starred ? '已标记星标' : '已取消星标')
-//     }
-//   } catch (error) {
-//     console.error('标记星标失败:', error)
-//     ElMessage.error('操作失败')
-//   }
-// }
-
 const deleteMessage = (message) => {
   ElMessageBox.confirm(
-    `确定要删除"${message.title}"吗？`,
-    '删除消息',
+    '确定移除此条通知？',
+    '移除通知',
     {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
     }
   ).then(() => {
+    dismissNotification(message.id)
     messages.value = messages.value.filter(msg => msg.id !== message.id)
     activeMessage.value = null
-    ElMessage.success('消息已删除')
-  })
-}
-
-// 修改deleteMessage为真实API调用
-// const deleteMessage = async (message) => {
-//   ElMessageBox.confirm(
-//     `确定要删除"${message.title}"吗？`,
-//     '删除消息',
-//     {
-//       confirmButtonText: '确定',
-//       cancelButtonText: '取消',
-//       type: 'warning'
-//     }
-//   ).then(async () => {
-//     try {
-//       const response = await axios.delete(`/api/messages/${message.id}`, {
-//         headers: {
-//           'Authorization': `Bearer ${localStorage.getItem('token')}`
-//         }
-//       })
-//
-//       if (response.data.success) {
-//         messages.value = messages.value.filter(msg => msg.id !== message.id)
-//         activeMessage.value = null
-//         ElMessage.success('消息已删除')
-//       }
-//     } catch (error) {
-//       console.error('删除消息失败:', error)
-//       ElMessage.error('删除失败')
-//     }
-//   })
-// }
-
-const replyMessage = (message) => {
-  replyContent.value = `\n\n---\n\n回复 "${message.sender.name}" 的消息：\n${message.content}\n`
-  // 滚动到回复区域
-  nextTick(() => {
-    const replyArea = document.querySelector('.reply-textarea')
-    if (replyArea) {
-      replyArea.focus()
-      replyArea.scrollIntoView({ behavior: 'smooth' })
-    }
-  })
-}
-
-const forwardMessage = (message) => {
-  sendDialogVisible.value = true
-  // 预填充转发内容
-  nextTick(() => {
-    sendForm.value.subject = `转发：${message.title}`
-    sendForm.value.content = `\n\n---\n\n转发消息：\n${message.content}\n\n发送者：${message.sender.name}\n发送时间：${formatFullTime(message.createdAt)}`
-  })
+    ElMessage.success('已移除')
+  }).catch(() => {})
 }
 
 const downloadAttachment = (attachment) => {
   ElMessage.info(`开始下载：${attachment.name}`)
-  // 实际应该调用下载API
 }
-
-// 修改downloadAttachment为真实API调用
-// const downloadAttachment = async (attachment) => {
-//   try {
-//     const response = await axios.get(`/api/messages/attachments/${attachment.id}/download`, {
-//       headers: {
-//         'Authorization': `Bearer ${localStorage.getItem('token')}`
-//       },
-//       responseType: 'blob'
-//     })
-//
-//     // 创建下载链接
-//     const url = window.URL.createObjectURL(new Blob([response.data]))
-//     const link = document.createElement('a')
-//     link.href = url
-//     link.setAttribute('download', attachment.name)
-//     document.body.appendChild(link)
-//     link.click()
-//     link.remove()
-//
-//     ElMessage.success('开始下载')
-//   } catch (error) {
-//     console.error('下载附件失败:', error)
-//     ElMessage.error('下载失败')
-//   }
-// }
-
-const attachFile = () => {
-  ElMessage.info('添加附件功能')
-}
-
-const insertEmoji = () => {
-  ElMessage.info('插入表情功能')
-}
-
-const formatText = (type) => {
-  const textarea = document.querySelector('.reply-textarea')
-  if (!textarea) return
-
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  const selectedText = replyContent.value.substring(start, end)
-
-  let formattedText = selectedText
-  switch (type) {
-    case 'bold':
-      formattedText = `**${selectedText}**`
-      break
-    case 'italic':
-      formattedText = `*${selectedText}*`
-      break
-    default:
-      break
-  }
-
-  replyContent.value =
-    replyContent.value.substring(0, start) +
-    formattedText +
-    replyContent.value.substring(end)
-}
-
-const cancelReply = () => {
-  replyContent.value = ''
-}
-
-const sendReply = () => {
-  if (!replyContent.value.trim()) {
-    ElMessage.warning('请输入回复内容')
-    return
-  }
-
-  // 模拟发送回复
-  const newMessage = {
-    id: messages.value.length + 1,
-    type: 'sent',
-    title: `回复：${activeMessage.value.title}`,
-    content: replyContent.value,
-    sender: {
-      id: 0,
-      name: '我',
-      email: store.state.user.email,
-      avatar: store.state.user.avatar,
-      role: 'user'
-    },
-    recipient: activeMessage.value.sender,
-    read: true,
-    starred: false,
-    important: false,
-    urgent: false,
-    createdAt: new Date(),
-    hasAttachments: false
-  }
-
-  messages.value.unshift(newMessage)
-  replyContent.value = ''
-  ElMessage.success('回复已发送')
-}
-
-// 修改sendReply为真实API调用
-// const sendReply = async () => {
-//   if (!replyContent.value.trim()) {
-//     ElMessage.warning('请输入回复内容')
-//     return
-//   }
-//
-//   if (!activeMessage.value) {
-//     ElMessage.warning('请选择要回复的消息')
-//     return
-//   }
-//
-//   try {
-//     const response = await axios.post('/api/messages', {
-//       recipientId: activeMessage.value.sender.id,
-//       title: `回复：${activeMessage.value.title}`,
-//       content: replyContent.value,
-//       type: 'normal',
-//       parentId: activeMessage.value.id
-//     }, {
-//       headers: {
-//         'Authorization': `Bearer ${localStorage.getItem('token')}`
-//       }
-//     })
-//
-//     if (response.data.success) {
-//       const newMessage = response.data.data
-//       messages.value.unshift(newMessage)
-//       replyContent.value = ''
-//       ElMessage.success('回复已发送')
-//     }
-//   } catch (error) {
-//     console.error('发送回复失败:', error)
-//     ElMessage.error('发送失败')
-//   }
-// }
 
 const refreshMessages = () => {
   fetchMessages()
 }
 
 const markAllAsRead = () => {
+  markAllNotificationsRead(messages.value)
   messages.value.forEach(msg => {
-    if (!msg.read && msg.type !== 'sent') {
-      msg.read = true
-    }
+    msg.read = true
   })
   ElMessage.success('全部标记为已读')
 }
-
-// 后端可以参考调用
-// const markAllAsRead = async () => {
-//   try {
-//     // 实际API调用
-//     const response = await axios.post('/api/messages/mark-all-read', {}, {
-//       headers: {
-//         'Authorization': `Bearer ${localStorage.getItem('token')}`
-//       }
-//     })
-//
-//     if (response.data.success) {
-//       // 更新本地状态
-//       messages.value.forEach(msg => {
-//         if (!msg.read && msg.type !== 'sent') {
-//           msg.read = true
-//         }
-//       })
-//       ElMessage.success('全部标记为已读')
-//     } else {
-//       throw new Error(response.data.message || '标记失败')
-//     }
-//   } catch (error) {
-//     console.error('标记已读失败:', error)
-//     ElMessage.error('标记已读失败')
-//   }
-// }
-
-const showSendDialog = () => {
-  sendDialogVisible.value = true
-}
-
-const searchUsers = async (query) => {
-  if (!query.trim()) {
-    searchResults.value = []
-    return
-  }
-
-  searchLoading.value = true
-  try {
-    // 模拟搜索用户
-    await new Promise(resolve => setTimeout(resolve, 500))
-    searchResults.value = [
-      { id: 1, name: '张明', email: 'zhangming@example.com', avatar: 'https://picsum.photos/seed/user1/50/50' },
-      { id: 2, name: '李华', email: 'lihua@example.com', avatar: 'https://picsum.photos/seed/user2/50/50' },
-      { id: 3, name: '王伟', email: 'wangwei@example.com', avatar: 'https://picsum.photos/seed/user3/50/50' }
-    ].filter(user =>
-      user.name.includes(query) || user.email.includes(query)
-    )
-  } catch (error) {
-    console.error('搜索用户失败:', error)
-  } finally {
-    searchLoading.value = false
-  }
-}
-
-// 修改searchUsers为真实API调用
-// const searchUsers = async (query) => {
-//   if (!query.trim()) {
-//     searchResults.value = []
-//     return
-//   }
-//
-//   searchLoading.value = true
-//   try {
-//     // 实际API调用
-//     const response = await axios.get('/api/users/search', {
-//       params: { q: query },
-//       headers: {
-//         'Authorization': `Bearer ${localStorage.getItem('token')}`
-//       }
-//     })
-//
-//     if (response.data.success) {
-//       searchResults.value = response.data.data
-//     }
-//   } catch (error) {
-//     console.error('搜索用户失败:', error)
-//     searchResults.value = [] // 失败时清空结果
-//   } finally {
-//     searchLoading.value = false
-//   }
-// }
-
-const handleFileChange = (file, fileList) => {
-  sendForm.value.attachments = fileList
-}
-
-const handleFileRemove = (file, fileList) => {
-  sendForm.value.attachments = fileList
-}
-
-const resetSendForm = () => {
-  sendForm.value = {
-    recipient: '',
-    type: 'normal',
-    subject: '',
-    content: '',
-    attachments: []
-  }
-  searchResults.value = []
-}
-
-const submitSendMessage = async () => {
-  try {
-    sendLoading.value = true
-
-    // 模拟发送消息
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    const newMessage = {
-      id: messages.value.length + 1,
-      type: 'sent',
-      title: sendForm.value.subject,
-      content: sendForm.value.content,
-      sender: {
-        id: 0,
-        name: '我',
-        email: store.state.user.email,
-        avatar: store.state.user.avatar,
-        role: 'user'
-      },
-      recipient: {
-        name: sendForm.value.recipient,
-        email: sendForm.value.recipient + '@example.com'
-      },
-      read: true,
-      starred: false,
-      important: sendForm.value.type === 'important',
-      urgent: false,
-      createdAt: new Date(),
-      hasAttachments: sendForm.value.attachments.length > 0,
-      attachments: sendForm.value.attachments.map(file => ({
-        id: Date.now(),
-        name: file.name,
-        size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
-        type: file.type || 'unknown'
-      }))
-    }
-
-    messages.value.unshift(newMessage)
-    sendDialogVisible.value = false
-    activeTab.value = 'sent'
-    activeMessage.value = newMessage
-
-    ElMessage.success('消息发送成功')
-  } catch (error) {
-    console.error('发送消息失败:', error)
-    ElMessage.error('发送消息失败')
-  } finally {
-    sendLoading.value = false
-  }
-}
-
-// 修改submitSendMessage为真实API调用
-// const submitSendMessage = async () => {
-//   try {
-//     sendLoading.value = true
-//
-//     // 验证表单
-//     if (!sendForm.value.recipient) {
-//       ElMessage.warning('请选择收件人')
-//       return
-//     }
-//
-//     if (!sendForm.value.subject.trim()) {
-//       ElMessage.warning('请输入消息主题')
-//       return
-//     }
-//
-//     if (!sendForm.value.content.trim()) {
-//       ElMessage.warning('请输入消息内容')
-//       return
-//     }
-//
-//     // 处理附件上传
-//     const formData = new FormData()
-//     formData.append('recipientId', sendForm.value.recipient)
-//     formData.append('title', sendForm.value.subject)
-//     formData.append('content', sendForm.value.content)
-//     formData.append('type', sendForm.value.type)
-//
-//     sendForm.value.attachments.forEach((file, index) => {
-//       formData.append(`attachments[${index}]`, file.raw)
-//     })
-//
-//     // 实际API调用
-//     const response = await axios.post('/api/messages', formData, {
-//       headers: {
-//         'Authorization': `Bearer ${localStorage.getItem('token')}`,
-//         'Content-Type': 'multipart/form-data'
-//       }
-//     })
-//
-//     if (response.data.success) {
-//       const newMessage = response.data.data
-//       messages.value.unshift(newMessage)
-//       sendDialogVisible.value = false
-//       activeTab.value = 'sent'
-//       activeMessage.value = newMessage
-//
-//       ElMessage.success('消息发送成功')
-//     }
-//   } catch (error) {
-//     console.error('发送消息失败:', error)
-//     ElMessage.error('发送消息失败')
-//   } finally {
-//     sendLoading.value = false
-//   }
-// }
 
 onMounted(() => {
   fetchMessages()

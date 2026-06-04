@@ -160,7 +160,7 @@ onMounted(async () => {
   // 如果分类数据为空，则获取项目列表
   if (categories.value.length === 0) {
     try {
-      await store.dispatch('fetchProjects', { useMock: true })
+      await store.dispatch('fetchProjects', {})
     } catch (error) {
       console.error('Failed to fetch projects:', error)
     }

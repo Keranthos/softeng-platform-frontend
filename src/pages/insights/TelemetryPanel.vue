@@ -2,8 +2,8 @@
   <div class="telemetry-page">
     <header class="head">
       <div>
-        <h1>前端可观测性面板</h1>
-        <p class="sub">Performance API · Axios 耗时环缓 · 内存估算（Chrome）</p>
+        <h1>接口与性能监控</h1>
+        <p class="sub">页面加载指标 · HTTP 耗时 · 内存占用（管理员运维面板）</p>
       </div>
       <div class="actions">
         <el-button type="primary" plain @click="refresh">
@@ -64,10 +64,14 @@
     </el-card>
 
     <el-card class="swr-card" shadow="never">
-      <template #header>SWR 演示说明（A15）</template>
-      <p class="muted">
-        列表类数据可采用「先展示缓存（stale）→ 后台静默重验证（revalidate）」降低白屏时间。
-        本仓库已在运营大屏等处使用前端刷新演示；完整 SWR 可在 Vuex action 或 TanStack Query 中接入同一指标面板观测效果。
+      <template #header>管理快捷入口</template>
+      <div class="quick-links">
+        <el-button @click="$router.push('/insights/dashboard')">数据概览</el-button>
+        <el-button @click="$router.push('/check/audit')">审核中心</el-button>
+        <el-button @click="$router.push('/insights/knowledge-graph')">关联图谱</el-button>
+      </div>
+      <p class="muted mt-2">
+        上方 HTTP 样本由全站 API 请求自动采集；可在列表页、详情页操作后回到此页查看耗时变化。
       </p>
     </el-card>
   </div>
@@ -193,6 +197,14 @@ onMounted(() => {
 .table-card,
 .swr-card {
   margin-bottom: 16px;
+}
+.quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.mt-2 {
+  margin-top: 10px;
 }
 .muted {
   color: #94a3b8;

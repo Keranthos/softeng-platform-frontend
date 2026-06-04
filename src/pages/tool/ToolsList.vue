@@ -267,9 +267,9 @@
               </p>
             </div>
             <!-- 提示框 -->
-            <div v-if="activeToolId === (tool.resourceId || tool.id)" class="tooltip-absolute animate-pop-in">
+            <div v-if="activeToolId === (tool.resourceId || tool.id) && getToolTooltipText(tool)" class="tooltip-absolute animate-pop-in">
               <div class="absolute -top-1 left-8 w-2 h-2 bg-gray-800 rotate-45"></div>
-              {{ tool.descriptionDetail || tool.description || tool.fullDesc || tool.desc || '暂无详细描述' }}
+              {{ getToolTooltipText(tool) }}
             </div>
           </div>
         </div>
@@ -346,19 +346,23 @@ const tagFilterSearch = ref('') // 标签过滤搜索
 
 const toolsLoadError = ref('')
 
+function normText (s) {
+  return String(s || '').replace(/\s+/g, ' ').trim()
+}
+
+function getToolTooltipText (tool) {
+  const detail = normText(tool.descriptionDetail || tool.description_detail || '')
+  const brief = normText(tool.description || tool.desc || '')
+  if (!detail || detail === brief) return ''
+  return detail
+}
+
 const reloadToolsList = async () => {
   toolsLoadError.value = ''
   try {
-    await store.dispatch('fetchTools', { useMock: false })
-    if (toolsList.value.length === 0) {
-      await store.dispatch('fetchTools', { useMock: true })
-    }
+    await store.dispatch('fetchTools', {})
   } catch (e) {
-    try {
-      await store.dispatch('fetchTools', { useMock: true })
-    } catch (e2) {
-      toolsLoadError.value = '无法加载工具列表，请检查网络后重试'
-    }
+    toolsLoadError.value = '无法加载工具列表，请检查网络后重试'
   }
   if (toolsList.value.length === 0 && !toolsLoadError.value) {
     toolsLoadError.value = '暂无工具数据'
@@ -672,26 +676,9 @@ watch(() => route.query, (newQuery) => {
 // 五、生命周期函数
 onMounted(async () => {
   document.addEventListener('click', closeDropdowns)
-  console.log('工具列表页面已挂载')
 
-  // 没有数据时需要加载数据
   if (toolsList.value.length === 0) {
-    try {
-      await store.dispatch('fetchTools', { useMock: false })
-      if (toolsList.value.length === 0) {
-        await store.dispatch('fetchTools', { useMock: true })
-      }
-    } catch (error) {
-      console.error('获取工具列表失败，尝试演示数据:', error)
-      try {
-        await store.dispatch('fetchTools', { useMock: true })
-      } catch (e2) {
-        toolsLoadError.value = '无法加载工具列表，请检查网络后重试'
-      }
-    }
-    if (toolsList.value.length === 0 && !toolsLoadError.value) {
-      toolsLoadError.value = '暂无工具数据'
-    }
+    await reloadToolsList()
   }
 
   // 启用工具提交按钮

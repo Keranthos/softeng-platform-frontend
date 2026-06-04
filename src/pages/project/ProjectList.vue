@@ -259,9 +259,9 @@
               </div>
             </div>
             <!-- 提示框 -->
-            <div v-if="activeProjectId === project.id" class="tooltip-absolute animate-pop-in">
+            <div v-if="activeProjectId === project.id && getProjectTooltipText(project)" class="tooltip-absolute animate-pop-in">
               <div class="absolute -top-1 left-8 w-2 h-2 bg-gray-800 rotate-45"></div>
-              {{ project.details || project.description }}
+              {{ getProjectTooltipText(project) }}
             </div>
           </div>
         </div>
@@ -371,6 +371,19 @@ const engineRef = ref(null)
 const tooltipTimers = ref({})
 const tagFilterSearch = ref('')
 const TOOLTIP_DELAY = 500
+
+function normText (s) {
+  return String(s || '').replace(/\s+/g, ' ').trim()
+}
+
+function getProjectTooltipText (project) {
+  if (!project) return ''
+  const details = normText(project.details)
+  const brief = normText(project.description)
+  if (!details || details === brief) return ''
+  if (brief && details.startsWith(brief)) return details.slice(brief.length).trim() || details
+  return details
+}
 
 // 计算属性 - 修复 includes() 错误
 const filteredTagGroups = computed(() => {
@@ -607,10 +620,18 @@ const filterRef = ref(null)
 const avatarRef = ref(null)
 
 // 生命周期函数
-onMounted(() => {
+const reloadProjectsList = async () => {
+  try {
+    await store.dispatch('fetchProjects', {})
+  } catch (error) {
+    console.error('获取项目列表失败:', error)
+    ElMessage.error('无法加载项目列表，请检查网络后重试')
+  }
+}
+
+onMounted(async () => {
   document.addEventListener('click', closeDropdowns)
-  // 初始化获取项目列表
-  store.dispatch('fetchProjects', { useMock: true })
+  await reloadProjectsList()
 })
 
 onUnmounted(() => {

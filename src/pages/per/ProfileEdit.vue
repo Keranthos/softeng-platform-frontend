@@ -5,10 +5,10 @@
     <div class="profile-card">
       <!-- 封面图区域 -->
       <div class="cover-container">
-        <img :src="user.cover || randomCoverUrl" alt="封面" class="cover-image">
+        <img :src="user.cover || defaultCoverUrl" alt="封面" class="cover-image">
         <div class="cover-overlay"></div>
         <div class="cover-actions">
-          <button @click="refreshCover" class="cover-btn" title="换一张封面">
+          <button @click="refreshCover" class="cover-btn" title="更换默认封面样式">
             <i class="fas fa-sync-alt"></i>
           </button>
           <button @click="editCover" class="cover-btn" title="上传封面">
@@ -169,6 +169,7 @@ import { ref, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
 import { getUserAvatarUrl } from '@/utils/avatar'
+import { generateDefaultCoverDataUrl } from '@/utils/defaultProfileImages'
 
 const store = useStore()
 const avatarType = ref('random')
@@ -193,66 +194,8 @@ const stats = ref({
   posts: 0
 })
 
-// 随机图片生成器
-const useRandomImages = () => {
-  const randomAvatarUrl = ref('')
-  const randomCoverUrl = ref('')
-
-  const randomNumber = () => Math.floor(Math.random() * 1000)
-
-  const imageSources = [
-    {
-      name: 'unsplash',
-      avatar: () => `https://loremflickr.com/256/256/portrait?random=${randomNumber()}`,
-      cover: () => `https://picsum.photos/seed/cover-${randomNumber()}/1920/600`
-    },
-    {
-      name: 'picsum',
-      avatar: () => `https://picsum.photos/seed/avatar-${randomNumber()}/256/256`,
-      cover: () => `https://picsum.photos/seed/cover-${randomNumber()}/1920/600`
-    },
-    {
-      name: 'flickr',
-      avatar: () => `https://loremflickr.com/256/256/portrait?random=${randomNumber()}`,
-      cover: () => `https://loremflickr.com/1920/600/scenery,landscape?random=${randomNumber()}`
-    }
-  ]
-
-  const getRandomSource = () => {
-    return imageSources[Math.floor(Math.random() * imageSources.length)]
-  }
-
-  const generateRandomAvatar = () => {
-    const source = getRandomSource()
-    randomAvatarUrl.value = source.avatar()
-    return randomAvatarUrl.value
-  }
-
-  const generateRandomCover = () => {
-    const source = getRandomSource()
-    randomCoverUrl.value = source.cover()
-    return randomCoverUrl.value
-  }
-
-  const generateBoth = () => {
-    generateRandomAvatar()
-    generateRandomCover()
-  }
-
-  return {
-    randomAvatarUrl,
-    randomCoverUrl,
-    generateRandomAvatar,
-    generateRandomCover,
-    generateBoth
-  }
-}
-
-const {
-  randomCoverUrl,
-  generateRandomCover,
-  generateBoth
-} = useRandomImages()
+const defaultCoverUrl = ref(generateDefaultCoverDataUrl('default'))
+const coverVariant = ref(0)
 
 // 获取头像URL：如果有自定义头像就使用，否则使用默认头像
 const getAvatarUrl = () => {
@@ -260,9 +203,6 @@ const getAvatarUrl = () => {
 }
 
 onMounted(async () => {
-  generateBoth()
-
-  // 从store获取用户信息
   const token = localStorage.getItem('token')
   if (token) {
     try {
@@ -270,6 +210,7 @@ onMounted(async () => {
       const userData = await store.dispatch('fetchUserProfile')
       if (userData && (userData.id || userData.username)) {
         user.value = userData
+        defaultCoverUrl.value = generateDefaultCoverDataUrl(userData.username || userData.nickname || 'cover')
         // 初始化编辑中的个人简介为当前值
         editingDescription.value = userData.description || ''
 
@@ -320,8 +261,14 @@ onMounted(async () => {
 // })
 
 const refreshCover = () => {
-    user.value.cover = generateRandomCover()
-    ElMessage.success('已刷新随机封面')
+  if (user.value.cover) {
+    ElMessage.info('已设置自定义封面，请在基础信息中修改封面链接')
+    return
+  }
+  coverVariant.value += 1
+  const seed = `${user.value.username || 'cover'}_${coverVariant.value}`
+  defaultCoverUrl.value = generateDefaultCoverDataUrl(seed)
+  ElMessage.success('已更换封面样式')
 }
 
 const editAvatar = () => {

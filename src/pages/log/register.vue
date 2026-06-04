@@ -43,7 +43,7 @@
         </el-form-item>
 
         <!-- 邀请码 -->
-        <el-form-item prop="email">
+        <el-form-item prop="certify_password">
           <el-input
             placeholder="邀请码"
             v-model="registerForm.certify_password"
@@ -95,7 +95,7 @@
 </template>
 
 <script setup>
-// 脚本部分和之前完全一样，这里省略（可直接复制上一版的 script）
+// 脚本：注册表单与校验
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
@@ -121,7 +121,7 @@ const loading = ref(false)
 const validateUsername = (rule, value, callback) => {
   const reg = /^[\u4e00-\u9fa5]{2,4}$/
   if (!value) callback(new Error('请输入用户名'))
-  else if (!reg.test(value)) callback(new Error('4-16位字母、数字或下划线'))
+  else if (!reg.test(value)) callback(new Error('请输入 2–4 个汉字作为用户名'))
   else callback()
 }
 
@@ -133,9 +133,9 @@ const validateEmail = (rule, value, callback) => {
 }
 
 const validateNickname = (rule, value, callback) => {
-  const reg = /^(?!.*[u4e00-u9fa5]{9})[a-zA-Z0-9_\u4e00-\u9fa5-]{2,20}$/
-  if (!value) callback(new Error('请输入邮箱'))
-  else if (!reg.test(value)) callback(new Error('请输入正确昵称'))
+  const reg = /^(?!.*[\u4e00-\u9fa5]{9})[a-zA-Z0-9_\u4e00-\u9fa5-]{2,20}$/
+  if (!value) callback(new Error('请输入昵称'))
+  else if (!reg.test(value)) callback(new Error('昵称格式不正确'))
   else callback()
 }
 

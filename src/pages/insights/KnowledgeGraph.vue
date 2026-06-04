@@ -3,79 +3,62 @@
     <header class="kg-header">
       <div>
         <h1>资源关联图谱</h1>
-        <p class="sub">按标签共现构建演示边 · 可对接后端图查询 API</p>
+        <p class="sub">根据标签共现展示工具、课程、项目之间的关联，点击节点可跳转详情</p>
       </div>
       <div class="actions">
+        <el-button :loading="loading" @click="loadGraph">
+          <i class="fas fa-sync-alt mr-1" /> 刷新
+        </el-button>
         <el-button-group>
           <el-button :type="physics ? 'primary' : 'default'" @click="physics = true; applyPhysics()">力导向</el-button>
-          <el-button :type="!physics ? 'primary' : 'default'" @click="physics = false; freezeLayout()">固定布局</el-button>
+          <el-button :type="!physics ? 'primary' : 'default'" @click="physics = false; freezeLayout()">环形</el-button>
         </el-button-group>
+        <el-button @click="$router.push('/insights/long-list')"><i class="fas fa-list mr-1" /> 资源目录</el-button>
         <el-button @click="$router.push('/home')"><i class="fas fa-home mr-1" /> 主页</el-button>
       </div>
     </header>
 
     <div class="legend">
-      <span><i class="dot tool" /> 工具</span>
-      <span><i class="dot course" /> 课程</span>
-      <span><i class="dot project" /> 项目</span>
+      <span><i class="dot tool" /> 工具 ({{ stats.tools }})</span>
+      <span><i class="dot course" /> 课程 ({{ stats.courses }})</span>
+      <span><i class="dot project" /> 项目 ({{ stats.projects }})</span>
+      <span class="edge-hint">连线越粗表示共享标签越多</span>
     </div>
 
-    <div ref="graphRef" class="graph-wrap" />
-    <p class="hint">拖拽节点可调整视角；滚轮缩放。用于报告中的「知识关联 / 多资源一体化检索」叙事。</p>
+    <div v-if="loading" class="loading"><i class="fas fa-spinner fa-spin" /> 构建关联图谱…</div>
+    <div v-else-if="!graphData.nodes.length" class="empty">
+      <el-empty description="暂无带标签的资源，请先在资源提交时填写标签" />
+    </div>
+    <div v-else ref="graphRef" class="graph-wrap" />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
+import { HttpManager } from '@/api'
+import { extractApiList, mergeResources, buildTagGraph } from '@/utils/resourceCatalog'
 
+const router = useRouter()
 const graphRef = ref(null)
 const physics = ref(true)
+const loading = ref(true)
+const graphData = ref({ nodes: [], links: [], categories: [] })
+const stats = ref({ tools: 0, courses: 0, projects: 0 })
 let chart
 
-const categories = [
-  { name: '工具' },
-  { name: '课程' },
-  { name: '项目' }
-]
-
-const nodes = [
-  { id: '0', name: 'Vue 生态', symbolSize: 52, category: 0, value: 10 },
-  { id: '1', name: 'Go 微服务', symbolSize: 46, category: 0, value: 9 },
-  { id: '2', name: '软工导论', symbolSize: 44, category: 1, value: 8 },
-  { id: '3', name: 'Web 前端课', symbolSize: 42, category: 1, value: 8 },
-  { id: '4', name: '实训平台', symbolSize: 56, category: 2, value: 12 },
-  { id: '5', name: 'CI/CD 实践', symbolSize: 40, category: 2, value: 7 },
-  { id: '6', name: 'Docker', symbolSize: 38, category: 0, value: 6 },
-  { id: '7', name: 'REST 设计', symbolSize: 36, category: 1, value: 6 },
-  { id: '8', name: '团队协作', symbolSize: 34, category: 2, value: 5 },
-  { id: '9', name: 'MySQL', symbolSize: 36, category: 0, value: 6 }
-]
-
-const links = [
-  { source: '0', target: '3', value: 3 },
-  { source: '0', target: '4', value: 4 },
-  { source: '1', target: '4', value: 5 },
-  { source: '1', target: '5', value: 3 },
-  { source: '2', target: '3', value: 2 },
-  { source: '3', target: '4', value: 4 },
-  { source: '6', target: '1', value: 3 },
-  { source: '6', target: '5', value: 2 },
-  { source: '7', target: '4', value: 3 },
-  { source: '9', target: '4', value: 4 },
-  { source: '8', target: '4', value: 2 },
-  { source: '0', target: '6', value: 2 }
-]
-
 function buildOption () {
+  const { nodes, links, categories } = graphData.value
   return {
     backgroundColor: 'transparent',
     tooltip: {
       formatter: (p) => {
         if (p.dataType === 'edge') {
-          return `${p.data.source} → ${p.data.target}<br/>关联强度: ${p.data.value}`
+          return `共享标签：${p.data.tags || ''}<br/>关联强度：${p.data.value}`
         }
-        return `${p.data.name}<br/>类型: ${categories[p.data.category].name}`
+        const d = p.data
+        return `${d.fullName || d.name}<br/>类型：${d.typeLabel}<br/>点击跳转详情`
       }
     },
     series: [{
@@ -84,25 +67,25 @@ function buildOption () {
       roam: true,
       draggable: true,
       force: {
-        repulsion: 420,
-        edgeLength: [80, 160],
-        gravity: 0.08
+        repulsion: 380,
+        edgeLength: [70, 140],
+        gravity: 0.1
       },
       categories,
-      data: nodes.map((n) => ({
+      data: nodes.map(n => ({
         ...n,
         itemStyle: {
           color: n.category === 0 ? '#38bdf8' : n.category === 1 ? '#4ade80' : '#c084fc'
         }
       })),
-      links: links.map((l) => ({
+      links: links.map(l => ({
         ...l,
-        lineStyle: { width: 1 + l.value, curveness: 0.12, opacity: 0.55 }
+        lineStyle: { width: 1 + l.value * 1.2, curveness: 0.15, opacity: 0.6 }
       })),
-      label: { show: true, position: 'right', color: '#e2e8f0', fontSize: 11 },
+      label: { show: true, position: 'right', color: '#e2e8f0', fontSize: 10 },
       emphasis: { focus: 'adjacency', lineStyle: { width: 4, opacity: 1 } },
       edgeSymbol: ['none', 'arrow'],
-      edgeSymbolSize: [0, 10]
+      edgeSymbolSize: [0, 8]
     }]
   }
 }
@@ -110,7 +93,7 @@ function buildOption () {
 function applyPhysics () {
   if (!chart) return
   chart.setOption({
-    series: [{ layout: 'force', force: { repulsion: 420, edgeLength: [80, 160], gravity: 0.08 } }]
+    series: [{ layout: 'force', force: { repulsion: 380, edgeLength: [70, 140], gravity: 0.1 } }]
   })
 }
 
@@ -121,21 +104,56 @@ function freezeLayout () {
   })
 }
 
+function onChartClick (params) {
+  if (params.dataType === 'node' && params.data?.route) {
+    router.push(params.data.route)
+  }
+}
+
 function onResize () {
   chart && chart.resize()
 }
 
-onMounted(async () => {
+async function loadGraph () {
+  loading.value = true
+  if (chart) {
+    chart.dispose()
+    chart = null
+  }
+  try {
+    const [toolsRes, coursesRes, projectsRes] = await Promise.all([
+      HttpManager.getTools({ page_size: 200 }),
+      HttpManager.getCourses({ limit: 200, cursor: 0 }),
+      HttpManager.getProjects({ limit: 200 })
+    ])
+    const tools = extractApiList(toolsRes)
+    const courses = extractApiList(coursesRes)
+    const projects = extractApiList(projectsRes)
+    stats.value = { tools: tools.length, courses: courses.length, projects: projects.length }
+    const merged = mergeResources(tools, courses, projects)
+    graphData.value = buildTagGraph(merged)
+  } catch (e) {
+    console.error('[graph] 加载失败', e)
+    graphData.value = { nodes: [], links: [], categories: [] }
+  }
+  loading.value = false
   await nextTick()
-  if (!graphRef.value) return
-  chart = echarts.init(graphRef.value)
-  chart.setOption(buildOption())
+  if (graphRef.value && graphData.value.nodes.length) {
+    chart = echarts.init(graphRef.value)
+    chart.setOption(buildOption())
+    chart.on('click', onChartClick)
+  }
+}
+
+onMounted(async () => {
+  await loadGraph()
   window.addEventListener('resize', onResize)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)
   if (chart) {
+    chart.off('click', onChartClick)
     chart.dispose()
     chart = null
   }
@@ -166,15 +184,18 @@ onUnmounted(() => {
   margin: 6px 0 0;
   color: #94a3b8;
   font-size: 0.88rem;
+  max-width: 520px;
 }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   margin-bottom: 10px;
   font-size: 0.85rem;
   color: #94a3b8;
 }
+.edge-hint { color: #64748b; }
 .dot {
   display: inline-block;
   width: 10px;
@@ -193,9 +214,11 @@ onUnmounted(() => {
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(15, 23, 42, 0.35);
 }
-.hint {
-  margin-top: 12px;
-  font-size: 0.8rem;
-  color: #64748b;
+.loading, .empty {
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
 }
 </style>

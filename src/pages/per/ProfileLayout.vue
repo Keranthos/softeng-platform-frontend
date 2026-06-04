@@ -48,9 +48,7 @@ const navItems = computed(() => [
   { id: 'collection', name: '我的收藏', icon: 'fa-star', path: '/profile/collection', badge: null },
   { id: 'submissions', name: '我的提交', icon: 'fa-paper-plane', path: '/profile/submissions', badge: null },
   { id: 'reviews', name: '审核状态', icon: 'fa-clipboard-check', path: '/profile/reviews', badge: null },
-  { id: 'messages', name: '站内消息', icon: 'fa-envelope', path: '/profile/messages', badge: null },
-  { id: 'security', name: '账户安全', icon: 'fa-shield-alt', path: '/profile/security', badge: null },
-  { id: 'settings', name: '系统设置', icon: 'fa-cog', path: '/profile/settings', badge: null }
+  { id: 'security', name: '账户安全', icon: 'fa-shield-alt', path: '/profile/security', badge: null }
 ])
 </script>
 

@@ -4,8 +4,10 @@
       <template #title>
         <span class="title-row">
           <i class="fas fa-wand-magic-sparkles text-amber-500" />
-          <strong>智能内容摘要</strong>
-          <el-tag size="small" type="warning" effect="plain">演示 · 规则生成</el-tag>
+          <strong>内容摘要</strong>
+          <el-tag size="small" :type="fromDatabase ? 'success' : 'info'" effect="plain">
+            {{ fromDatabase ? insightTag : '规则生成' }}
+          </el-tag>
         </span>
       </template>
       <p class="summary-text">{{ insight.summary }}</p>
@@ -22,17 +24,37 @@ import { buildLocalSummary } from '@/utils/contentInsight'
 
 const props = defineProps({
   title: { type: String, default: '' },
-  body: { type: String, default: '' }
+  body: { type: String, default: '' },
+  /** 后端 contentInsight：{ summary, bullets } */
+  insight: { type: Object, default: null },
+  /** 库内精编摘要时的标签文案 */
+  insightTag: { type: String, default: '资源精编' }
 })
 
-const active = ref(['panel'])
+const active = ref([])
 
-const insight = computed(() => buildLocalSummary(props.title, props.body))
+const fromDatabase = computed(() => {
+  const s = props.insight?.summary
+  return typeof s === 'string' && s.trim().length > 0
+})
+
+const insight = computed(() => {
+  if (fromDatabase.value) {
+    const bullets = Array.isArray(props.insight.bullets)
+      ? props.insight.bullets.filter(Boolean)
+      : []
+    return {
+      summary: props.insight.summary.trim(),
+      bullets: bullets.slice(0, 5)
+    }
+  }
+  return buildLocalSummary(props.title, props.body)
+})
 
 watch(
-  () => [props.title, props.body],
+  () => [props.title, props.body, props.insight],
   () => {
-    active.value = ['panel']
+    active.value = []
   }
 )
 </script>

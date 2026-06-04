@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
     <div class="flex items-center gap-2 text-sm text-gray-500 px-1">
       <span
@@ -28,10 +28,10 @@
           </div>
 
           <button
-            @click="toggleLike"
+            @click="toggleCollect"
             class="group relative w-auto min-w-[110px] px-6 py-3 rounded-xl font-medium text-sm transition-all duration-300 ease-out active:scale-95 flex items-center justify-center gap-2 border"
             :class="[
-              isLiked
+              isCollected
                 ? 'bg-red-50 border-red-200 text-red-500 shadow-inner'
                 : 'bg-white border-gray-200 text-gray-600 shadow-sm hover:border-blue-300 hover:text-blue-600 hover:shadow-md hover:-translate-y-0.5'
             ]"
@@ -39,13 +39,21 @@
             <i
               class="text-base transition-transform duration-300"
               :class="[
-                isLiked
+                isCollected
                   ? 'fas fa-heart scale-110 drop-shadow-sm'
                   : 'far fa-heart group-hover:scale-110'
               ]"
             ></i>
-            <span>{{ isLiked ? '已收藏' : '收藏' }}</span>
+            <span>{{ isCollected ? '已收藏' : '收藏' }}</span>
           </button>
+          <div class="flex gap-4 text-xs text-gray-500 w-full justify-center">
+            <span class="flex items-center gap-1" title="浏览量">
+              <i class="fas fa-eye text-blue-400"></i>{{ courseInfo.views || 0 }}
+            </span>
+            <span class="flex items-center gap-1" title="收藏人数">
+              <i class="far fa-heart text-red-400"></i>{{ courseInfo.collections || 0 }}
+            </span>
+          </div>
         </div>
 
         <div class="flex-1 min-w-0 flex flex-col">
@@ -80,11 +88,14 @@
             <ResourceAiSummary
               :title="courseInfo.name"
               :body="String(courseInfo.description || '')"
+              :insight="contentInsight"
+              insight-tag="课程精编"
               class="mt-5"
             />
             <CourseLearningPath
               :course-id="String(route.params.id || route.params.courseId || '')"
               :course-title="courseInfo.name"
+              :path="learningPath"
             />
           </div>
         </div>
@@ -361,13 +372,18 @@ import { getImageUrl } from '@/utils/image'
 import ResourceAiSummary from '@/components/ResourceAiSummary.vue'
 import ResourceRecommendBar from '@/components/ResourceRecommendBar.vue'
 import CourseLearningPath from '@/components/CourseLearningPath.vue'
+import { matchResourceId, normalizeResourceId } from '@/utils/resourceId'
+import { semesterLabel } from '@/utils/semesterKey'
+import { parseCourseJsonField } from '@/utils/courseContent'
+
+const COURSE_VIEW_SESSION_PREFIX = 'softeng_course_view_'
 
 const router = useRouter()
 const route = useRoute()
 const store = useStore()
 
 // 1. 状态管理
-const isLiked = ref(false)
+const isCollected = ref(false)
 const courseId = ref(null)
 const sortType = ref('hot') // 'hot' | 'time'
 
@@ -384,8 +400,13 @@ const courseInfo = ref({
   semester: '',
   credit: 0,
   cover: '',
-  description: ''
+  description: '',
+  views: 0,
+  collections: 0,
+  loves: 0
 })
+const contentInsight = ref(null)
+const learningPath = ref(null)
 
 const courseRecommendKeywords = computed(() => {
   const kws = []
@@ -405,11 +426,7 @@ const courseRecommendKeywords = computed(() => {
 })
 
 // 计算课程封面图片URL（使用计算属性避免模板中直接调用函数）
-const courseCoverUrl = computed(() => {
-  const url = getImageUrl(courseInfo.value?.cover || '')
-  console.log('[DEBUG] courseCoverUrl computed:', url, 'from:', courseInfo.value?.cover)
-  return url
-})
+const courseCoverUrl = computed(() => getImageUrl(courseInfo.value?.cover || ''))
 
 const resources = ref({
   docs: [],
@@ -429,17 +446,6 @@ const hasMoreComments = computed(() => {
   return comments.value.length < commentTotal.value
 })
 
-// 学期映射
-const semesterMap = {
-  '1-1': '大一上',
-  '1-2': '大一下',
-  '2-1': '大二上',
-  '2-2': '大二下',
-  '3-1': '大三上',
-  '3-2': '大三下',
-  '4-1': '大四上',
-  '4-2': '大四下'
-}
 
 // 3. 计算属性：排序逻辑
 const sortedComments = computed(() => {
@@ -463,7 +469,7 @@ const checkCollectionStatus = async (courseId) => {
   try {
     const token = store.state.token || localStorage.getItem('token')
     if (!token || !courseId) {
-      isLiked.value = false
+      isCollected.value = false
       return
     }
     const response = await HttpManager.getUserCollection()
@@ -483,17 +489,17 @@ const checkCollectionStatus = async (courseId) => {
         ...(response.teaches || [])
       ]
     }
-    isLiked.value = allCollections.some(item =>
-      (item.resourceId || item.resource_id || item.courseId || item.course_id) === parseInt(courseId) && 
+    isCollected.value = allCollections.some(item =>
+      matchResourceId(item.resourceId ?? item.resource_id ?? item.courseId ?? item.course_id ?? item.id, courseId) &&
       (item.resourceType || item.resource_type) === 'course'
     )
   } catch (error) {
     console.error('检查收藏状态失败:', error)
-    isLiked.value = false
+    isCollected.value = false
   }
 }
 
-const toggleLike = async () => {
+const toggleCollect = async () => {
   if (!isAuthenticated.value) {
     try {
       await ElMessageBox.confirm('请先登录以收藏课程', '提示', {
@@ -515,11 +521,11 @@ const toggleLike = async () => {
 
   try {
     // 保存操作前的状态，用于回滚
-    const previousLikes = courseInfo.value.likes || 0
-    const previousIsCollected = isLiked.value
-    
+    const previousCollections = courseInfo.value.collections || 0
+    const previousIsCollected = isCollected.value
+
     let response
-  if (isLiked.value) {
+  if (isCollected.value) {
       // 取消收藏
       response = await HttpManager.removeCourseCollection(courseId.value)
     } else {
@@ -530,53 +536,34 @@ const toggleLike = async () => {
     // 后端返回格式: { message: "success", data: { iscollected: true/false, collections: number } }
     if (response && (response.message === 'success' || response.code === 200 || response.data)) {
       const data = response.data || response
-      const newIsCollected = data.iscollected !== undefined ? data.iscollected : !isLiked.value
-      
-      // 更新收藏状态
-      isLiked.value = newIsCollected
+      const newIsCollected = data.iscollected !== undefined ? data.iscollected : !isCollected.value
 
-      // 更新课程收藏数（likes字段用于显示收藏数）
-      // 优先使用后端返回的 collections 值（这是数据库中最准确的）
-      let finalLikes = previousLikes
+      isCollected.value = newIsCollected
+
+      let finalCollections = previousCollections
       if (data.collections !== undefined && typeof data.collections === 'number' && data.collections >= 0) {
-        finalLikes = data.collections
-        courseInfo.value.likes = finalLikes
-        console.log('使用后端返回的收藏数:', finalLikes)
-      } else {
-        // 如果后端没有返回 collections 或值为无效，则根据收藏状态变化来增减
-        if (newIsCollected && !previousIsCollected) {
-          // 从未收藏变为已收藏，增加1
-          finalLikes = previousLikes + 1
-          courseInfo.value.likes = finalLikes
-          console.log('手动增加收藏数，新值:', finalLikes)
-        } else if (!newIsCollected && previousIsCollected) {
-          // 从已收藏变为未收藏，减少1
-          finalLikes = Math.max(0, previousLikes - 1)
-          courseInfo.value.likes = finalLikes
-          console.log('手动减少收藏数，新值:', finalLikes)
-        }
-        console.warn('后端未返回有效的 collections 值，使用本地计算:', data.collections)
+        finalCollections = data.collections
+      } else if (newIsCollected && !previousIsCollected) {
+        finalCollections = previousCollections + 1
+      } else if (!newIsCollected && previousIsCollected) {
+        finalCollections = Math.max(0, previousCollections - 1)
       }
+      courseInfo.value.collections = finalCollections
 
-      // 同步更新列表页的数据
       store.commit('updateCourseInList', {
         courseId: courseId.value,
-        collections: finalLikes, // 使用 collections 字段（收藏数）
-        likes: finalLikes, // 兼容字段
+        collections: finalCollections,
         isCollected: newIsCollected
       })
-      console.log('已同步更新列表页数据:', { courseId: courseId.value, collections: finalLikes, isCollected: newIsCollected })
-      
-      // 如果列表页已加载，直接更新列表页的数据（无需等待路由返回）
+
       if (typeof window !== 'undefined' && window.updateCourseInLocalList) {
-        window.updateCourseInLocalList(courseId.value, finalLikes)
+        window.updateCourseInLocalList(courseId.value, finalCollections)
       }
 
-      ElMessage.success(isLiked.value ? '课程已加入收藏夹' : '已取消收藏')
+      ElMessage.success(isCollected.value ? '课程已加入收藏夹' : '已取消收藏')
   } else {
-      // 操作失败，恢复之前的状态
-      isLiked.value = previousIsCollected
-      courseInfo.value.likes = previousLikes
+      isCollected.value = previousIsCollected
+      courseInfo.value.collections = previousCollections
       throw new Error(response?.message || '收藏操作失败')
     }
   } catch (error) {
@@ -814,26 +801,36 @@ const fetchCourseDetail = async (id) => {
       throw new Error('课程不存在或已删除')
     }
     
-    // 映射课程信息
-    console.log('[DEBUG] 课程数据:', courseData)
-    console.log('[DEBUG] 课程封面URL:', courseData.cover)
-    
+    const teacherRaw = courseData.teacher
+    const teacherText = Array.isArray(teacherRaw)
+      ? teacherRaw.filter(Boolean).join('、')
+      : (teacherRaw || '未知教师')
+
     courseInfo.value = {
       name: courseData.name || '',
-      teacher: Array.isArray(courseData.teacher) && courseData.teacher.length > 0 
-        ? courseData.teacher[0] 
-        : (courseData.teacher || '未知教师'),
-      semester: semesterMap[courseData.semester] || courseData.semester || '',
+      teacher: teacherText || '未知教师',
+      semester: semesterLabel(courseData.semester),
       credit: courseData.credit || 0,
       cover: courseData.cover || '',
       description: courseData.description || '暂无课程描述',
-      likes: courseData.likes || courseData.collections || 0,
-      views: courseData.views || 0
+      views: Number(courseData.views) || 0,
+      collections: Number(courseData.collections) || 0,
+      loves: Number(courseData.likes ?? courseData.loves ?? 0)
     }
-    
-    console.log('[DEBUG] courseInfo.cover:', courseInfo.value.cover)
-    console.log('[DEBUG] courseCoverUrl:', getImageUrl(courseInfo.value.cover))
-    
+
+    contentInsight.value = parseCourseJsonField(
+      courseData.contentInsight ?? courseData.content_insight
+    )
+    learningPath.value = parseCourseJsonField(
+      courseData.learningPath ?? courseData.learning_path
+    )
+
+    if (courseData.iscollected !== undefined) {
+      isCollected.value = !!courseData.iscollected
+    } else if (courseData.isCollected !== undefined) {
+      isCollected.value = !!courseData.isCollected
+    }
+
     // 保存评论总数
     commentTotal.value = courseData.comment_total || courseData.commentTotal || 0
     
@@ -939,16 +936,28 @@ const fetchCourseDetail = async (id) => {
       comments.value = []
     }
     
-    // 增加浏览量
-    try {
-      await HttpManager.addCourseView(id)
-    } catch (error) {
-      console.error('增加浏览量失败:', error)
-      // 浏览量增加失败不影响主流程
+    const rid = normalizeResourceId(id)
+    const viewKey = rid ? `${COURSE_VIEW_SESSION_PREFIX}${rid}` : null
+    const alreadyCounted = viewKey && typeof sessionStorage !== 'undefined' && sessionStorage.getItem(viewKey)
+    if (!alreadyCounted) {
+      try {
+        const viewRes = await HttpManager.addCourseView(id)
+        const payload = viewRes?.data ?? viewRes
+        const updatedViews = payload?.views ?? payload?.data?.views
+        if (updatedViews !== undefined) {
+          courseInfo.value.views = Number(updatedViews) || courseInfo.value.views
+        } else {
+          courseInfo.value.views = (courseInfo.value.views || 0) + 1
+        }
+        if (viewKey) sessionStorage.setItem(viewKey, '1')
+      } catch (error) {
+        console.error('增加浏览量失败:', error)
+      }
     }
-    
-    // 如果已登录，检查收藏状态
-    if (isAuthenticated.value) {
+
+    const needCollectionCheck = isAuthenticated.value &&
+      courseData.iscollected === undefined && courseData.isCollected === undefined
+    if (needCollectionCheck) {
       await checkCollectionStatus(id)
     }
     

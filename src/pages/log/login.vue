@@ -142,14 +142,9 @@ const handleLoginIn = () => {
 
       HttpManager.loginIn(params)
         .then(res => {
-          console.log('登录响应:', res)
-          // 后端返回格式：{ message: "1", "JWT token": "..." } 或 { code: 200, token: "..." }
           const token = res['JWT token'] || res.token || res.data?.token
           const isSuccess = res.message === '1' || res.code === 1 || res.code === 200 || token
-          
-          console.log('提取的token:', token)
-          console.log('登录是否成功:', isSuccess)
-          
+
           if (isSuccess && token) {
             // 保存token
             localStorage.setItem('token', token)
@@ -220,23 +215,15 @@ const handleLoginIn = () => {
             
             // 尝试从不同格式的响应中提取错误信息
             if (errorData) {
-              console.log('errorData类型:', typeof errorData)
-              console.log('errorData内容:', errorData)
-              
               if (typeof errorData === 'string') {
                 try {
                   const parsed = JSON.parse(errorData)
                   errorMsg = parsed.message || errorMsg
-                  console.log('解析后的错误消息:', errorMsg)
                 } catch (e) {
                   errorMsg = errorData || errorMsg
-                  console.log('使用原始字符串:', errorMsg)
                 }
               } else if (errorData.message) {
                 errorMsg = errorData.message
-                console.log('从message字段获取:', errorMsg)
-              } else {
-                console.log('errorData结构:', Object.keys(errorData))
               }
             }
             
